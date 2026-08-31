@@ -3,15 +3,18 @@
 
 בשלוחה מסוג API בממשק של ימות מגדירים:
     type=api
-    api_link=https://<כתובת השירות>/yemot?secret=<YEMOT_API_SECRET>
+    api_link=https://<כתובת השירות>/yemot
+    api_add_0=secret=<YEMOT_API_SECRET>
+    say_api_answer=no
 
 ימות קוראת לנתיב הזה בכל שלב בשיחה ומצרפת את כל הערכים שכבר נקראו בה, ולכן
 הזרימה כאן היא פונקציה של הפרמטרים שהתקבלו: כל שלב מזוהה לפי אילו משתנים
 כבר קיימים בבקשה. ראה logic/yemot.py לתיאור הפרוטוקול.
 
-ערך שנקרא בשיחה נשאר בה עד סופה, ולכן תפריט חוזר משתמש ב-re_enter כדי
-לדרוס את הבחירה הקודמת, ותהליך הדיווח מסתיים תמיד בניתוק — כך אין מצב שבו
-ערכים ישנים מתוך התהליך גורמים לרישום כפול.
+ערך שנקרא בשיחה נשאר בה עד סופה, ואין דרך מתועדת לנקות אותו: קריאה חוזרת
+עם re_enter מוסיפה עותק נוסף במקום לדרוס. לכן הזרימה ליניארית בכוונה — כל
+ענף מסתיים בניתוק ולא בחזרה לתפריט. חזרה לתפריט אחרי פעולה יוצרת לולאה
+אינסופית, כי הבחירה הישנה ממשיכה להגיע בכל בקשה ולהיכנס שוב לאותו ענף.
 """
 import os
 from datetime import date, datetime, timedelta
@@ -21,7 +24,8 @@ from flask import Blueprint, Response, request, current_app
 from extensions import db
 from models import User, Veeset, Reminder
 from logic import yemot as y
-from logic.calculations import get_all_expected, hdate_str
+from logic.calculations import hdate_str
+from logic.expected import get_user_expected
 from logic.onah import determine_onah
 from logic.recalculate import recalculate_all
 
@@ -39,7 +43,11 @@ VESET_TYPE_NAMES = {
     'yom_hachodesh': 'יום החודש',
     'haflagah': 'הפלגה',
     'or_zarua': 'אור זרוע',
+    'kavua_yom_hachodesh': 'וסת קבועה יום החודש',
+    'kavua_haflagah': 'וסת קבועה הפלגה',
 }
+# סוגים שמקריאים עבורם גם את מספר ימי ההפלגה
+HAFLAGAH_TYPES = ('haflagah', 'kavua_haflagah')
 
 
 def _reply(text):
@@ -53,6 +61,17 @@ def _onah_name(onah):
 
 def _normalize_phone(raw):
     return (raw or '').strip().replace('-', '').replace(' ', '').replace('+972', '0')
+
+
+def _value(values, name):
+    """
+    הערך האחרון שהתקבל למשתנה שנקרא ב-read.
+
+    ימות מצרפת בכל בקשה את כל הערכים שנאספו בשיחה, וכשקוראים משתנה בשנית
+    היא מוסיפה עותק נוסף במקום לדרוס את הקודם. הערך העדכני הוא האחרון.
+    """
+    collected = values.getlist(name)
+    return collected[-1] if collected else None
 
 
 def _received_secret(values):
@@ -104,7 +123,7 @@ def _describe_expected(item):
     """בונה רצף הודעות לתיאור יום פרישה אחד."""
     name = VESET_TYPE_NAMES.get(item['type'], 'יום פרישה')
     parts = [y.h_date(item['gregorian_date']), y.t(name)]
-    if item['type'] == 'haflagah' and item.get('haflagah_days'):
+    if item['type'] in HAFLAGAH_TYPES and item.get('haflagah_days'):
         parts += [y.n(item['haflagah_days']), y.t('ימים')]
     parts.append(y.t(_onah_name(item.get('onah'))))
     return y.msgs(*parts)
@@ -137,7 +156,7 @@ def yemot_gateway():
         return _reply(_end(y.t('החשבון שלך ממתין לאישור מנהל')))
 
     # ===== שלב 1: קוד PIN =====
-    pin = values.get('pin')
+    pin = _value(values, 'pin')
     if not pin:
         return _reply(y.read(
             y.msgs(y.t('שלום'), y.t('נא להקיש את הקוד האישי ולסיים בסולמית')),
@@ -148,7 +167,7 @@ def yemot_gateway():
         return _reply(_end(y.t('הקוד שהוקש שגוי')))
 
     # ===== שלב 2: תפריט ראשי =====
-    menu = values.get('menu')
+    menu = _value(values, 'menu')
     if not menu:
         return _reply(_main_menu(greet=user.name))
 
@@ -165,14 +184,11 @@ def yemot_gateway():
     return _reply(_end(y.t('להתראות')))
 
 
-def _main_menu(*messages, greet=None):
-    """
-    התפריט הראשי. re_enter מבטיח שהבחירה תישאל מחדש בכל חזרה לתפריט,
-    ולא תילקח מהערך שנשמר בשיחה בפעם הקודמת.
-    """
-    parts = list(messages)
+def _main_menu(greet=None):
+    """התפריט הראשי. נקרא פעם אחת בשיחה — כל ענף מסתיים בניתוק."""
+    parts = []
     if greet:
-        parts.insert(0, y.t('שלום ' + greet))
+        parts.append(y.t('שלום ' + greet))
     parts += [
         y.t('לדיווח ראייה חדשה הקישי 1'),
         y.t('לימי פרישה קרובים הקישי 2'),
@@ -181,7 +197,7 @@ def _main_menu(*messages, greet=None):
         y.t('לסיום הקישי 9'),
     ]
     return y.read(y.msgs(*parts), 'menu', max_digits=1, min_digits=1,
-                  re_enter=True, digits_allowed=[1, 2, 3, 4, 9])
+                  digits_allowed=[1, 2, 3, 4, 9])
 
 
 def _end(*messages):
@@ -196,7 +212,7 @@ def _flow_report(user, values):
     תהליך הדיווח מסתיים תמיד בניתוק, כדי שהערכים שנקראו בו לא יישארו
     בשיחה ויגרמו לרישום נוסף אם המתקשרת תיכנס שוב לאותו תפריט.
     """
-    when = values.get('rep_when')
+    when = _value(values, 'rep_when')
     if not when:
         return y.read(
             y.msgs(y.t('לדיווח על ראייה שהיתה היום הקישי 1'),
@@ -210,7 +226,7 @@ def _flow_report(user, values):
     elif when == '2':
         g_date = date.today() - timedelta(days=1)
     else:
-        raw_date = values.get('rep_date')
+        raw_date = _value(values, 'rep_date')
         if not raw_date:
             return y.read(
                 y.t('נא להקיש את תאריך הראייה שתי ספרות יום שתי ספרות חודש וארבע ספרות שנה'),
@@ -222,7 +238,7 @@ def _flow_report(user, values):
         if g_date > date.today():
             return _end(y.t('לא ניתן לדווח על תאריך עתידי'))
 
-    raw_time = values.get('rep_time')
+    raw_time = _value(values, 'rep_time')
     if not raw_time:
         return y.read(
             y.t('נא להקיש את שעת הראייה שתי ספרות שעה ושתי ספרות דקות'),
@@ -234,7 +250,7 @@ def _flow_report(user, values):
 
     onah = determine_onah(time_str, g_date, user)
 
-    confirm = values.get('rep_confirm')
+    confirm = _value(values, 'rep_confirm')
     if not confirm:
         return y.read(
             y.msgs(
@@ -279,20 +295,20 @@ def _flow_report(user, values):
 # ===== 2 — ימי פרישה קרובים =====
 
 def _flow_upcoming(user):
-    vesetot = Veeset.query.filter_by(user_id=user.id)\
-                          .order_by(Veeset.gregorian_date).all()
+    # אותו חישוב שהלוח הראשי מציג — כולל קבועות וביטול ווסתות בהריון
+    vesetot, expected, _ = get_user_expected(user)
     if not vesetot:
-        return _main_menu(y.t('אין ראיות רשומות במערכת'))
+        return _end(y.t('אין ראיות רשומות במערכת'))
 
     today = date.today()
-    upcoming = [e for e in get_all_expected(user, vesetot)
-                if e['gregorian_date'] >= today][:UPCOMING_LIMIT]
+    upcoming = [e for e in expected if e['gregorian_date'] >= today][:UPCOMING_LIMIT]
     if not upcoming:
-        return _main_menu(y.t('אין ימי פרישה קרובים'))
+        return _end(y.t('אין ימי פרישה קרובים'),
+                    y.t('יתכן שהראייה האחרונה ישנה ויש לדווח על ראייה חדשה'))
 
     parts = [y.t('ימי הפרישה הקרובים')]
     parts += [_describe_expected(item) for item in upcoming]
-    return _main_menu(*parts)
+    return _end(*parts)
 
 
 # ===== 3 — הראייה האחרונה =====
@@ -301,9 +317,9 @@ def _flow_last(user):
     veeset = Veeset.query.filter_by(user_id=user.id)\
                          .order_by(Veeset.gregorian_date.desc()).first()
     if not veeset:
-        return _main_menu(y.t('אין ראיות רשומות במערכת'))
+        return _end(y.t('אין ראיות רשומות במערכת'))
 
-    return _main_menu(
+    return _end(
         y.t('הראייה האחרונה נרשמה בתאריך'),
         y.h_date(veeset.gregorian_date),
         y.t('בשעה'),
@@ -321,9 +337,9 @@ def _flow_reminders(user):
                               .order_by(Reminder.gregorian_date)\
                               .limit(REMINDERS_LIMIT).all()
     if not reminders:
-        return _main_menu(y.t('אין תזכורות קרובות'))
+        return _end(y.t('אין תזכורות קרובות'))
 
     parts = [y.t('התזכורות הקרובות')]
     parts += [y.msgs(y.g_date(r.gregorian_date), y.t(r.title or 'תזכורת'))
               for r in reminders]
-    return _main_menu(*parts)
+    return _end(*parts)

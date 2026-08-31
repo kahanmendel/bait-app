@@ -76,9 +76,9 @@ print('\n--- hangup --- (empty ok)')
 check('ask pin', call(client), ['read=', 'pin,no,8,4,7,No,no,no,,,3,,,'])
 check('bad pin', call(client, pin='9999'), ['שגוי', 'go_to_folder=hangup'])
 check('main menu', call(client, pin='1234'),
-      ['שלום שרה', 'menu,yes,1,1,7,No,no,no,,1.2.3.4.9,,,,'])
+      ['שלום שרה', 'menu,no,1,1,7,No,no,no,,1.2.3.4.9,,,,'])
 check('last, empty', call(client, pin='1234', menu='3'),
-      ['אין ראיות רשומות', 'read='])
+      ['אין ראיות רשומות', 'go_to_folder=hangup'])
 
 check('report step when', call(client, pin='1234', menu='1'),
       ['rep_when,no,1,1,7,No,no,no,,1.2.3,,,,'])
@@ -107,9 +107,35 @@ with app.app_context():
     print('\n--- DB --- saved:', saved[0].gregorian_date, saved[0].time_of_sighting,
           saved[0].onah)
 
-check('last', call(client, pin='1234', menu='3'), ['האחרונה', 'dateH-', 'menu,yes'])
-check('upcoming', call(client, pin='1234', menu='2'), ['ימי הפרישה הקרובים', 'menu,yes'])
-check('reminders', call(client, pin='1234', menu='4'), ['אין תזכורות', 'menu,yes'])
+check('last', call(client, pin='1234', menu='3'),
+      ['האחרונה', 'dateH-', 'go_to_folder=hangup'])
+check('upcoming', call(client, pin='1234', menu='2'),
+      ['ימי הפרישה הקרובים', 'go_to_folder=hangup'])
+check('reminders', call(client, pin='1234', menu='4'),
+      ['אין תזכורות', 'go_to_folder=hangup'])
 check('exit', call(client, pin='1234', menu='9'), ['להתראות', 'go_to_folder=hangup'])
+
+# אף ענף לא רשאי להחזיר read על menu: ימות אינה דורסת ערך שכבר נאסף אלא
+# מוסיפה עותק, ולכן חזרה לתפריט מכניסה את השיחה ללולאה אינסופית
+for choice in ('2', '3', '4', '9'):
+    answer = call(client, pin='1234', menu=choice)
+    assert 'menu,' not in answer, f'menu={choice} loops back to the menu: {answer}'
+    assert 'go_to_folder=hangup' in answer, f'menu={choice} does not end the call'
+print('\n--- no branch loops back to the menu --- ok')
+
+# ימות שולחת את הערך שוב ושוב באותה שיחה; הערך הקובע הוא האחרון
+duplicated = client.get('/yemot?secret=' + SECRET + '&ApiPhone=' + PHONE
+                        + '&pin=1234' + '&menu=2' * 80)
+check('duplicated menu values', duplicated.get_data(as_text=True),
+      ['go_to_folder=hangup'])
+assert 'menu,' not in duplicated.get_data(as_text=True), 'duplicated values still loop'
+
+# הלוח הראשי משתמש באותו חישוב — ודא שהוא עדיין נטען
+login = client.post('/login', data={'phone': PHONE, 'pin': '1234'})
+assert login.status_code in (302, 200), login.status_code
+dashboard = client.get('/')
+assert dashboard.status_code == 200, dashboard.status_code
+assert 'ימי פרישה' in dashboard.get_data(as_text=True)
+print('--- dashboard renders --- ok')
 
 print('\n\nALL YEMOT TESTS PASSED')
