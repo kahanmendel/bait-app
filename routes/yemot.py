@@ -17,6 +17,7 @@
 אינסופית, כי הבחירה הישנה ממשיכה להגיע בכל בקשה ולהיכנס שוב לאותו ענף.
 """
 import os
+import re
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, request, current_app
@@ -51,6 +52,25 @@ VESET_TYPE_NAMES = {
 # סוגים שמקריאים עבורם גם את מספר ימי ההפלגה
 HAFLAGAH_TYPES = ('haflagah', 'kavua_haflagah')
 
+# כותרות לתזכורת. נבחרות מרשימה כי אין דרך אמינה להקליד עברית מלוח המקשים
+REMINDER_TITLES = {
+    '1': 'הפסק טהרה',
+    '2': 'טבילה',
+    '3': 'בדיקה',
+    '4': 'תזכורת אישית',
+}
+
+# הקשה -> (שדה במודל, שם להקראה)
+MINHAG_FIELDS = {
+    '3': ('minhag_or_zarua', 'אור זרוע'),
+    '4': ('minhag_shmirah_kefulah', 'שמירה כפולה'),
+    '5': ('minhag_tikou', 'תיקו'),
+    '6': ('minhag_haflagah_aruka', 'הפלגה ארוכה'),
+}
+
+# הקשה -> שעות מראש לתזכורת
+REMINDER_HOURS = {'1': 6, '2': 12, '3': 24, '4': 48}
+
 
 def _reply(text):
     """תשובה לימות — טקסט גולמי ב-UTF-8."""
@@ -59,6 +79,10 @@ def _reply(text):
 
 def _onah_name(onah):
     return 'עונת יום' if onah == 'yom' else 'עונת לילה'
+
+
+def _on_off(enabled):
+    return 'מופעל' if enabled else 'מבוטל'
 
 
 def _value(values, name):
@@ -93,18 +117,28 @@ def _find_user(phone):
     return user
 
 
-def _parse_date(digits):
-    """DDMMYYYY -> date, או None אם לא תקין."""
+def _digits(raw):
+    """
+    הספרות בלבד מתוך ערך שהתקבל מימות.
+
+    כשקוראים עם typing_playback_mode של Date או Time ימות מחזירה את הערך
+    מפורמט ולא כספרות גולמיות — '10-10' לשעה 10:10 ו '00-05' לשעה 00:05.
+    """
+    return re.sub(r'\D', '', raw or '')
+
+
+def _parse_date(raw):
+    """DDMMYYYY, גם אם הגיע מפורמט -> date, או None אם לא תקין."""
     try:
-        return datetime.strptime(digits, '%d%m%Y').date()
+        return datetime.strptime(_digits(raw), '%d%m%Y').date()
     except ValueError:
         return None
 
 
-def _parse_time(digits):
-    """HHMM -> 'HH:MM', או None אם לא תקין."""
+def _parse_time(raw):
+    """HHMM, גם אם הגיע מפורמט -> 'HH:MM', או None אם לא תקין."""
     try:
-        return datetime.strptime(digits, '%H%M').strftime('%H:%M')
+        return datetime.strptime(_digits(raw), '%H%M').strftime('%H:%M')
     except ValueError:
         return None
 
@@ -177,6 +211,10 @@ def yemot_gateway():
         return _reply(_flow_last(user))
     if menu == '4':
         return _reply(_flow_reminders(user))
+    if menu == '5':
+        return _reply(_flow_add_reminder(user, values))
+    if menu == '6':
+        return _reply(_flow_settings(user, phone, values))
 
     # 9 או כל הקשה אחרת
     return _reply(_end(y.t('להתראות')))
@@ -192,10 +230,12 @@ def _main_menu(greet=None):
         y.t('לימי פרישה קרובים הקישי 2'),
         y.t('לפרטי הראייה האחרונה הקישי 3'),
         y.t('לתזכורות קרובות הקישי 4'),
+        y.t('להוספת תזכורת הקישי 5'),
+        y.t('להגדרות הקישי 6'),
         y.t('לסיום הקישי 9'),
     ]
     return y.read(y.msgs(*parts), 'menu', max_digits=1, min_digits=1,
-                  digits_allowed=[1, 2, 3, 4, 9])
+                  digits_allowed=[1, 2, 3, 4, 5, 6, 9])
 
 
 def _end(*messages):
@@ -380,6 +420,209 @@ def _flow_last(user):
         _say_time(veeset.time_of_sighting),
         y.t(_onah_name(veeset.onah)),
     )
+
+
+# ===== 5 — הוספת תזכורת אישית =====
+
+def _flow_add_reminder(user, values):
+    """
+    הוספת תזכורת. הכותרת נבחרת מרשימה קבועה ולא מוקלדת, כי אין דרך אמינה
+    להזין טקסט עברי מלוח המקשים.
+    """
+    title_key = _value(values, 'rem_title')
+    if not title_key:
+        parts = [y.t('נא לבחור את סוג התזכורת')]
+        parts += [y.t(f'ל{name} הקישי {key}')
+                  for key, name in REMINDER_TITLES.items()]
+        return y.read(y.msgs(*parts), 'rem_title', max_digits=1, min_digits=1,
+                      digits_allowed=list(REMINDER_TITLES))
+    title = REMINDER_TITLES.get(title_key)
+    if not title:
+        return _end(y.t('בחירה לא מוכרת'))
+
+    when = _value(values, 'rem_when')
+    if not when:
+        return y.read(
+            y.msgs(y.t('לתזכורת להיום הקישי 1'),
+                   y.t('למחר הקישי 2'),
+                   y.t('לתאריך אחר הקישי 3')),
+            'rem_when', max_digits=1, min_digits=1, digits_allowed=[1, 2, 3],
+        )
+
+    if when == '1':
+        g_date = date.today()
+    elif when == '2':
+        g_date = date.today() + timedelta(days=1)
+    else:
+        raw_date = _value(values, 'rem_date')
+        if not raw_date:
+            return y.read(
+                y.t('נא להקיש את התאריך שתי ספרות יום שתי ספרות חודש וארבע ספרות שנה'),
+                'rem_date', max_digits=8, min_digits=8, typing_playback='Date',
+            )
+        g_date = _parse_date(raw_date)
+        if not g_date:
+            return _end(y.t('התאריך שהוקש אינו תקין'))
+        if g_date < date.today():
+            return _end(y.t('לא ניתן לקבוע תזכורת לתאריך שעבר'))
+
+    raw_time = _value(values, 'rem_time')
+    if not raw_time:
+        return y.read(
+            y.t('נא להקיש את שעת התזכורת שתי ספרות שעה ושתי ספרות דקות'),
+            'rem_time', max_digits=4, min_digits=4, typing_playback='Time',
+        )
+    time_str = _parse_time(raw_time)
+    if not time_str:
+        return _end(y.t('השעה שהוקשה אינה תקינה'))
+
+    reminder = Reminder(
+        user_id=user.id,
+        type='personal',
+        title=title,
+        message='נוצר בשיחה טלפונית',
+        gregorian_date=g_date,
+        time_of_day=time_str,
+        recurrence='once',
+        active=True,
+    )
+    db.session.add(reminder)
+    db.session.commit()
+
+    return _end(
+        y.t('התזכורת נקבעה'),
+        y.t(title),
+        y.g_date(g_date),
+        y.t('בשעה'),
+        _say_time(time_str),
+    )
+
+
+# ===== 6 — הגדרות =====
+
+def _flow_settings(user, phone, values):
+    choice = _value(values, 'set_menu')
+    if not choice:
+        parts = [y.t('לשמיעת ההגדרות הנוכחיות הקישי 1'),
+                 y.t('לשינוי הקוד האישי הקישי 2')]
+        parts += [y.t(f'למנהג {name} הקישי {key}')
+                  for key, (_, name) in MINHAG_FIELDS.items()]
+        parts += [y.t('לימי הספירה הקישי 7'),
+                  y.t('לשעות לפני תזכורת הקישי 8')]
+        return y.read(y.msgs(*parts), 'set_menu', max_digits=1, min_digits=1,
+                      digits_allowed=[1, 2, 3, 4, 5, 6, 7, 8])
+
+    if choice == '1':
+        return _say_settings(user)
+    if choice == '2':
+        return _flow_change_pin(user, phone, values)
+    if choice in MINHAG_FIELDS:
+        return _flow_toggle_minhag(user, choice, values)
+    if choice == '7':
+        return _flow_sfira(user, values)
+    if choice == '8':
+        return _flow_reminder_hours(user, values)
+    return _end(y.t('בחירה לא מוכרת'))
+
+
+def _say_settings(user):
+    parts = [y.t('ההגדרות הנוכחיות')]
+    for field, name in MINHAG_FIELDS.values():
+        parts.append(y.t(f'מנהג {name} {_on_off(getattr(user, field))}'))
+    parts += [
+        y.t('ימי הספירה'),
+        y.n(user.yemei_sfira_days),
+        y.t('תזכורת'),
+        y.n(user.reminder_hours_before or 12),
+        y.t('שעות מראש'),
+    ]
+    return _end(*parts)
+
+
+def _flow_change_pin(user, phone, values):
+    """
+    שינוי הקוד של המספר שממנו התקשרו. לבעל נקבע קוד נפרד משלו, גם אם עד
+    כה השתמש בקוד המשותף.
+    """
+    new_pin = _value(values, 'set_pin')
+    if not new_pin:
+        return y.read(
+            y.t('נא להקיש קוד חדש בן ארבע עד שמונה ספרות ולסיים בסולמית'),
+            'set_pin', max_digits=8, min_digits=4,
+        )
+
+    confirm = _value(values, 'set_pin2')
+    if not confirm:
+        return y.read(
+            y.t('נא להקיש שוב את אותו קוד ולסיים בסולמית'),
+            'set_pin2', max_digits=8, min_digits=4,
+        )
+
+    if confirm != new_pin:
+        return _end(y.t('הקודים שהוקשו אינם זהים'), y.t('הקוד לא שונה'))
+
+    if user.is_husband_phone(phone):
+        user.set_pin_husband(new_pin)
+        message = y.t('הקוד של המספר הזה עודכן')
+    else:
+        user.set_pin(new_pin)
+        message = y.t('הקוד עודכן')
+    db.session.commit()
+
+    return _end(message)
+
+
+def _flow_toggle_minhag(user, choice, values):
+    field, name = MINHAG_FIELDS[choice]
+    answer = _value(values, 'set_value')
+    if not answer:
+        return y.read(
+            y.msgs(y.t(f'מנהג {name} כעת {_on_off(getattr(user, field))}'),
+                   y.t('להפעלה הקישי 1'),
+                   y.t('לביטול הקישי 2')),
+            'set_value', max_digits=1, min_digits=1, digits_allowed=[1, 2],
+        )
+
+    setattr(user, field, answer == '1')
+    db.session.commit()
+    return _end(y.t(f'מנהג {name} {_on_off(answer == "1")}'))
+
+
+def _flow_sfira(user, values):
+    answer = _value(values, 'set_sfira')
+    if not answer:
+        return y.read(
+            y.msgs(y.t('ימי הספירה כעת'),
+                   y.n(user.yemei_sfira_days),
+                   y.t('לחמישה ימים הקישי 1'),
+                   y.t('לארבעה ימים הקישי 2')),
+            'set_sfira', max_digits=1, min_digits=1, digits_allowed=[1, 2],
+        )
+
+    user.minhag_yemei_sfira = 'ashkenaz' if answer == '1' else 'beit_yosef'
+    db.session.commit()
+    return _end(y.t('ימי הספירה עודכנו ל'), y.n(user.yemei_sfira_days),
+                y.t('ימים'))
+
+
+def _flow_reminder_hours(user, values):
+    answer = _value(values, 'set_hours')
+    if not answer:
+        parts = [y.t('התזכורת נשלחת כעת'),
+                 y.n(user.reminder_hours_before or 12),
+                 y.t('שעות מראש')]
+        parts += [y.msgs(y.t('ל'), y.n(hours), y.t(f'שעות הקישי {key}'))
+                  for key, hours in REMINDER_HOURS.items()]
+        return y.read(y.msgs(*parts), 'set_hours', max_digits=1, min_digits=1,
+                      digits_allowed=list(REMINDER_HOURS))
+
+    hours = REMINDER_HOURS.get(answer)
+    if not hours:
+        return _end(y.t('בחירה לא מוכרת'))
+
+    user.reminder_hours_before = hours
+    db.session.commit()
+    return _end(y.t('התזכורת תישלח'), y.n(hours), y.t('שעות מראש'))
 
 
 # ===== 4 — תזכורות קרובות =====

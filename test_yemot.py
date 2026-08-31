@@ -5,6 +5,7 @@
 import os
 import sys
 import tempfile
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ['DATABASE_URL'] = 'sqlite:///' + tempfile.mktemp(suffix='.db').replace('\\', '/')
@@ -77,7 +78,7 @@ print('\n--- hangup --- (empty ok)')
 check('ask pin', call(client), ['read=', 'pin,no,8,4,7,No,no,no,,,3,,,'])
 check('bad pin', call(client, pin='9999'), ['שגוי', 'go_to_folder=hangup'])
 check('main menu', call(client, pin='1234'),
-      ['שלום שרה', 'menu,no,1,1,7,No,no,no,,1.2.3.4.9,,,,'])
+      ['שלום שרה', 'menu,no,1,1,7,No,no,no,,1.2.3.4.5.6.9,,,,'])
 check('last, empty', call(client, pin='1234', menu='3'),
       ['אין ראיות רשומות', 'go_to_folder=hangup'])
 
@@ -95,6 +96,18 @@ check('report bad time', call(client, pin='1234', menu='1', rep_when='1', rep_ti
 check('report future date', call(client, pin='1234', menu='1', rep_when='3',
                                  rep_date='01019999'),
       ['עתידי'])
+# עם typing_playback_mode ימות מחזירה את הערך מפורמט ולא כספרות גולמיות
+check('formatted time from yemot', call(client, pin='1234', menu='1',
+                                        rep_when='1', rep_time='10-10'),
+      ['rep_confirm', 'n-10'])
+assert 'אינה תקינה' not in call(client, pin='1234', menu='1',
+                                rep_when='1', rep_time='00-05')
+check('formatted date from yemot', call(client, pin='1234', menu='1',
+                                        rep_when='3', rep_date='01-01-2026',
+                                        rep_time='08-30'),
+      ['rep_confirm', 'dateH-'])
+print('  ok  formatted Date and Time values are accepted')
+
 check('report save', call(client, pin='1234', menu='1', rep_when='1',
                           rep_time='1430', rep_confirm='1'),
       ['נרשמה בהצלחה', 'עונת יום', 'go_to_folder=hangup'])
@@ -115,6 +128,58 @@ check('upcoming', call(client, pin='1234', menu='2'),
 check('reminders', call(client, pin='1234', menu='4'),
       ['אין תזכורות', 'go_to_folder=hangup'])
 check('exit', call(client, pin='1234', menu='9'), ['להתראות', 'go_to_folder=hangup'])
+
+print('\n=== 5 — הוספת תזכורת ===')
+check('reminder title menu', call(client, pin='1234', menu='5'),
+      ['rem_title,', 'הפסק טהרה'])
+check('reminder date menu', call(client, pin='1234', menu='5', rem_title='2'),
+      ['rem_when,'])
+check('reminder time', call(client, pin='1234', menu='5', rem_title='2',
+                            rem_when='2'),
+      ['rem_time,'])
+check('reminder past date', call(client, pin='1234', menu='5', rem_title='2',
+                                 rem_when='3', rem_date='01012020'),
+      ['תאריך שעבר'])
+check('reminder saved', call(client, pin='1234', menu='5', rem_title='2',
+                             rem_when='2', rem_time='20-15'),
+      ['התזכורת נקבעה', 'טבילה', 'go_to_folder=hangup'])
+with app.app_context():
+    from models import Reminder
+    saved_reminder = Reminder.query.filter_by(type='personal').one()
+    assert saved_reminder.title == 'טבילה', saved_reminder.title
+    assert saved_reminder.time_of_day == '20:15', saved_reminder.time_of_day
+    assert saved_reminder.gregorian_date == date.today() + timedelta(days=1)
+    print('  ok  reminder stored with the formatted time parsed correctly')
+
+check('reminders now lists it', call(client, pin='1234', menu='4'),
+      ['טבילה', 'go_to_folder=hangup'])
+
+print('\n=== 6 — הגדרות ===')
+check('settings menu', call(client, pin='1234', menu='6'),
+      ['set_menu,', 'אור זרוע'])
+check('settings readout', call(client, pin='1234', menu='6', set_menu='1'),
+      ['ההגדרות הנוכחיות', 'go_to_folder=hangup'])
+check('minhag prompt', call(client, pin='1234', menu='6', set_menu='3'),
+      ['אור זרוע', 'מבוטל', 'set_value,'])
+check('minhag enabled', call(client, pin='1234', menu='6', set_menu='3',
+                             set_value='1'),
+      ['אור זרוע', 'מופעל'])
+with app.app_context():
+    assert User.query.filter_by(phone=PHONE).one().minhag_or_zarua is True
+    print('  ok  minhag persisted')
+
+check('sfira changed', call(client, pin='1234', menu='6', set_menu='7',
+                            set_sfira='2'),
+      ['ימי הספירה עודכנו', 'n-4'])
+check('reminder hours changed', call(client, pin='1234', menu='6', set_menu='8',
+                                     set_hours='4'),
+      ['n-48', 'שעות מראש'])
+with app.app_context():
+    changed = User.query.filter_by(phone=PHONE).one()
+    assert changed.minhag_yemei_sfira == 'beit_yosef'
+    assert changed.reminder_hours_before == 48
+    print('  ok  sfira and reminder hours persisted')
+
 
 # אף ענף לא רשאי להחזיר read על menu: ימות אינה דורסת ערך שכבר נאסף אלא
 # מוסיפה עותק, ולכן חזרה לתפריט מכניסה את השיחה ללולאה אינסופית
@@ -138,5 +203,16 @@ dashboard = client.get('/')
 assert dashboard.status_code == 200, dashboard.status_code
 assert 'ימי פרישה' in dashboard.get_data(as_text=True)
 print('--- dashboard renders --- ok')
+
+check('pin mismatch', call(client, pin='1234', menu='6', set_menu='2',
+                           set_pin='5555', set_pin2='6666'),
+      ['אינם זהים', 'הקוד לא שונה'])
+check('pin changed', call(client, pin='1234', menu='6', set_menu='2',
+                          set_pin='5555', set_pin2='5555'),
+      ['הקוד עודכן'])
+with app.app_context():
+    assert User.query.filter_by(phone=PHONE).one().check_pin_for(PHONE, '5555')
+    print('  ok  pin changed by phone')
+PIN = '5555'
 
 print('\n\nALL YEMOT TESTS PASSED')
