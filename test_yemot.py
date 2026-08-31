@@ -56,9 +56,10 @@ with app.app_context():
 
 client = app.test_client()
 
+# מספר לא מוכר מגיע למסלול ההרשמה — הזרימה המלאה נבדקת ב-test_accounts.py
 response = client.get('/yemot', query_string={'secret': SECRET, 'ApiPhone': '0500000000'})
 check('unknown caller', response.get_data(as_text=True),
-      ['go_to_folder=hangup', 'אינו רשום'])
+      ['אינו רשום', 'להרשמה הקישי 1', 'reg_start,'])
 
 response = client.get('/yemot', query_string={'secret': 'wrong', 'ApiPhone': PHONE})
 check('bad secret', response.get_data(as_text=True), ['שגיאת הגדרה'])

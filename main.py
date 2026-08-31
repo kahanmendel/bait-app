@@ -56,6 +56,14 @@ def create_app():
         except Exception as e:
             app.logger.warning(f"db.create_all() failed: {e}")
 
+        try:
+            from logic.schema import ensure_schema
+            added = ensure_schema(db)
+            if added:
+                app.logger.info(f"schema: added columns {', '.join(added)}")
+        except Exception as e:
+            app.logger.warning(f"ensure_schema() failed: {e}")
+
     return app
 
 if __name__ == '__main__':

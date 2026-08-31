@@ -6,6 +6,51 @@
     <h2 style="margin-bottom:24px;">הגדרות</h2>
     <form method="POST">
 
+        <h3 style="margin-bottom:12px;color:#2c3e50;">👤 פרטים וכניסה</h3>
+        <div class="form-group">
+            <label>שם</label>
+            <input type="text" name="name" value="{{ current_user.name or '' }}"
+                   placeholder="שם פרטי">
+        </div>
+        <div class="form-group">
+            <label>מספר טלפון (האישה)</label>
+            <input type="tel" value="{{ current_user.phone }}" readonly
+                   style="direction:ltr;text-align:right;background:#f0f0f0;">
+            <small style="color:#666;">המספר הראשי אינו ניתן לשינוי כאן</small>
+        </div>
+        <div class="form-group">
+            <label>מספר טלפון (הבעל)</label>
+            <input type="tel" name="phone_husband" value="{{ current_user.phone_husband or '' }}"
+                   placeholder="05X-XXXXXXX" style="direction:ltr;text-align:right;">
+            <small style="color:#666;">שני המספרים נכנסים לאותו חשבון, גם באתר וגם בטלפון</small>
+        </div>
+        <div class="form-group">
+            <label>קוד אישי חדש (האישה)</label>
+            <input type="password" name="new_pin" placeholder="השאר ריק כדי לא לשנות"
+                   maxlength="8" minlength="4" inputmode="numeric" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+            <label>קוד אישי חדש (הבעל)</label>
+            <input type="password" name="new_pin_husband" placeholder="השאר ריק כדי לא לשנות"
+                   maxlength="8" minlength="4" inputmode="numeric" autocomplete="new-password">
+            <small style="color:#666;">
+                {% if current_user.pin_hash_husband %}
+                    לבעל יש כעת קוד נפרד משלו
+                {% else %}
+                    כרגע שני המספרים משתמשים באותו קוד
+                {% endif %}
+            </small>
+        </div>
+        {% if current_user.pin_hash_husband %}
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="clear_pin_husband">
+                בטל את הקוד הנפרד של הבעל וחזור לקוד משותף
+            </label>
+        </div>
+        {% endif %}
+
+        <hr style="margin:24px 0;">
         <h3 style="margin-bottom:12px;color:#2c3e50;">📍 מיקום ושעות</h3>
         <div class="form-group">
             <label>שם עיר</label>
@@ -61,11 +106,6 @@
         <hr style="margin:24px 0;">
         <h3 style="margin-bottom:12px;color:#2c3e50;">🔔 תזכורות</h3>
 
-        <div class="form-group">
-            <label>מספר טלפון (ימות המשיח)</label>
-            <input type="tel" name="yemot_phone" value="{{ current_user.yemot_phone or '' }}"
-                   placeholder="05X-XXXXXXX">
-        </div>
         <div class="form-group">
             <label>שעות לפני לקבל תזכורת</label>
             <select name="reminder_hours_before">

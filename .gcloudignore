@@ -13,3 +13,4 @@ logs.txt
 service.yaml
 test_kavua.py
 test_yemot.py
+test_accounts.py

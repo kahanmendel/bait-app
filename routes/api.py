@@ -74,7 +74,7 @@ def verify_pin():
     if not user:
         user = User.query.filter_by(phone_husband=phone).first()
 
-    if not user or not user.check_pin(pin):
+    if not user or not user.check_pin_for(phone, pin):
         return jsonify({'success': False, 'message': 'PIN שגוי'}), 401
 
     session = PhoneSession(

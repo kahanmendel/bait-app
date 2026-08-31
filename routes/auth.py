@@ -1,21 +1,22 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_user, logout_user, login_required
 from extensions import db
-from models import User, SUPER_ADMIN_PHONE
+from models import User, SUPER_ADMIN_PHONE, normalize_phone
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        phone = request.form['phone'].strip().replace('-', '').replace(' ', '')
+        phone = normalize_phone(request.form['phone'])
         pin = request.form['pin'].strip()
 
         user = User.query.filter_by(phone=phone).first()
         if not user:
             user = User.query.filter_by(phone_husband=phone).first()
 
-        if user and user.check_pin(pin):
+        # לבעל יכול להיות קוד משלו, ולכן האימות תלוי במספר שממנו נכנסו
+        if user and user.check_pin_for(phone, pin):
             if not user.is_approved:
                 flash('החשבון ממתין לאישור מנהל. נסה שוב מאוחר יותר.', 'danger')
                 return render_template('login.html')

@@ -21,8 +21,10 @@ from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, request, current_app
 
+from sqlalchemy.exc import IntegrityError
+
 from extensions import db
-from models import User, Veeset, Reminder
+from models import User, Veeset, Reminder, normalize_phone
 from logic import yemot as y
 from logic.calculations import hdate_str
 from logic.expected import get_user_expected
@@ -57,10 +59,6 @@ def _reply(text):
 
 def _onah_name(onah):
     return 'עונת יום' if onah == 'yom' else 'עונת לילה'
-
-
-def _normalize_phone(raw):
-    return (raw or '').strip().replace('-', '').replace(' ', '').replace('+972', '0')
 
 
 def _value(values, name):
@@ -145,15 +143,14 @@ def yemot_gateway():
         current_app.logger.warning('yemot: bad or missing secret')
         return _reply(_end(y.t('שגיאת הגדרה במערכת')))
 
-    user = _find_user(_normalize_phone(values.get('ApiPhone')))
+    phone = normalize_phone(values.get('ApiPhone'))
+
+    user = _find_user(phone)
     if not user:
-        return _reply(_end(
-            y.t('המספר שממנו התקשרת אינו רשום במערכת'),
-            y.t('יש להירשם באתר ולהוסיף את המספר בהגדרות'),
-        ))
+        return _reply(_flow_register(phone, values))
 
     if not user.is_approved:
-        return _reply(_end(y.t('החשבון שלך ממתין לאישור מנהל')))
+        return _reply(_end(y.t('החשבון שלך ממתין לאישור המנהל')))
 
     # ===== שלב 1: קוד PIN =====
     pin = _value(values, 'pin')
@@ -163,7 +160,8 @@ def yemot_gateway():
             'pin', max_digits=8, min_digits=4, attempts=PIN_ATTEMPTS,
         ))
 
-    if not user.check_pin(pin):
+    # לבעל יכול להיות קוד משלו, ולכן האימות תלוי במספר שממנו התקשרו
+    if not user.check_pin_for(phone, pin):
         return _reply(_end(y.t('הקוד שהוקש שגוי')))
 
     # ===== שלב 2: תפריט ראשי =====
@@ -203,6 +201,62 @@ def _main_menu(greet=None):
 def _end(*messages):
     """משמיע הודעה אחרונה ומנתק."""
     return y.combine(y.say(y.msgs(*messages)), y.hangup())
+
+
+# ===== הרשמה טלפונית =====
+
+def _flow_register(phone, values):
+    """
+    הרשמה למספר שאינו מוכר. החשבון נוצר לא מאושר, והמנהל מאשר אותו במסך
+    הניהול. אין הענקת הרשאות ניהול דרך הטלפון, כי מזהה מתקשר ניתן לזיוף.
+    """
+    if not phone:
+        return _end(y.t('לא ניתן לזהות את המספר שממנו התקשרת'),
+                    y.t('יש להתקשר שוב בלי חסימת מזהה'))
+
+    start = _value(values, 'reg_start')
+    if not start:
+        return y.read(
+            y.msgs(y.t('המספר שממנו התקשרת אינו רשום במערכת'),
+                   y.t('להרשמה הקישי 1'),
+                   y.t('לסיום הקישי 2')),
+            'reg_start', max_digits=1, min_digits=1, digits_allowed=[1, 2],
+        )
+    if start != '1':
+        return _end(y.t('להתראות'))
+
+    pin = _value(values, 'reg_pin')
+    if not pin:
+        return y.read(
+            y.t('נא לבחור קוד אישי בן ארבע עד שמונה ספרות ולסיים בסולמית'),
+            'reg_pin', max_digits=8, min_digits=4,
+        )
+
+    confirm = _value(values, 'reg_pin2')
+    if not confirm:
+        return y.read(
+            y.t('נא להקיש שוב את אותו קוד ולסיים בסולמית'),
+            'reg_pin2', max_digits=8, min_digits=4,
+        )
+
+    if confirm != pin:
+        return _end(y.t('הקודים שהוקשו אינם זהים'), y.t('נא להתקשר שוב'))
+
+    user = User(phone=phone, is_approved=False)
+    user.set_pin(pin)
+    db.session.add(user)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # שיחה מקבילה מאותו מספר הספיקה לרשום אותו
+        db.session.rollback()
+        return _end(y.t('המספר כבר רשום במערכת'))
+
+    return _end(
+        y.t('נרשמת בהצלחה'),
+        y.t('החשבון ממתין לאישור המנהל'),
+        y.t('לאחר האישור אפשר להתקשר שוב ולהזדהות בקוד שבחרת'),
+    )
 
 
 # ===== 1 — דיווח ראייה חדשה =====

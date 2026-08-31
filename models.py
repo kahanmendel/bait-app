@@ -6,12 +6,19 @@ import secrets
 
 SUPER_ADMIN_PHONE = '0533134298'
 
+
+def normalize_phone(raw):
+    """מספר טלפון בצורה אחידה — בלי מקפים, רווחים וקידומת בינלאומית."""
+    return (raw or '').strip().replace('-', '').replace(' ', '').replace('+972', '0')
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     phone = db.Column(db.String(20), unique=True, nullable=False)
     phone_husband = db.Column(db.String(20), unique=True, nullable=True)
     pin_hash = db.Column(db.String(256), nullable=False)
+    # קוד נפרד לבעל. ריק פירושו שהבעל עדיין משתמש בקוד המשותף
+    pin_hash_husband = db.Column(db.String(256))
     name = db.Column(db.String(100))
     # אדמין
     is_approved = db.Column(db.Boolean, default=False)
@@ -48,6 +55,25 @@ class User(UserMixin, db.Model):
 
     def check_pin(self, pin):
         return check_password_hash(self.pin_hash, str(pin))
+
+    def set_pin_husband(self, pin):
+        """קוד נפרד לבעל. pin ריק מבטל אותו וחוזר לקוד המשותף."""
+        self.pin_hash_husband = generate_password_hash(str(pin)) if pin else None
+
+    def is_husband_phone(self, phone):
+        husband = normalize_phone(self.phone_husband)
+        return bool(husband) and normalize_phone(phone) == husband
+
+    def check_pin_for(self, phone, pin):
+        """
+        מאמת קוד לפי המספר שממנו התחברו.
+
+        לבעל יש קוד משלו רק אם נקבע לו אחד; כל עוד לא נקבע, שני המספרים
+        נכנסים עם הקוד המשותף כדי שמשתמשים קיימים לא יינעלו בחוץ.
+        """
+        if self.is_husband_phone(phone) and self.pin_hash_husband:
+            return check_password_hash(self.pin_hash_husband, str(pin))
+        return self.check_pin(pin)
 
     @property
     def yemei_sfira_days(self):
