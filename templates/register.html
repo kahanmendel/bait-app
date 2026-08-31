@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}הרשמה{% endblock %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:40px auto;">
+    <h2 style="margin-bottom:24px;text-align:center;">הרשמה</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>שם (אופציונלי)</label>
+            <input type="text" name="name" placeholder="שם פרטי">
+        </div>
+        <div class="form-group">
+            <label>מספר טלפון (האישה)</label>
+            <input type="tel" name="phone" required placeholder="05X-XXXXXXX"
+                   style="direction:ltr;text-align:right;">
+        </div>
+        <div class="form-group">
+            <label>קוד PIN (4-8 ספרות)</label>
+            <input type="password" name="pin" required placeholder="בחר PIN סודי"
+                   maxlength="8" minlength="4" inputmode="numeric">
+            <small style="color:#666;">PIN זה ישמש לכניסה ולאימות מול ימות המשיח</small>
+        </div>
+        <button class="btn btn-primary" style="width:100%">הרשמה</button>
+    </form>
+    <p style="text-align:center;margin-top:16px;">
+        יש חשבון? <a href="/login">כניסה</a>
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}לוח ראשי{% endblock %}
+{% block content %}
+
+<!-- בנר הריון -->
+{% if current_user.pregnancy_active %}
+<div class="card" style="background:{% if current_user.pregnancy_vesetot_cancelled_at %}#e8f5e9{% else %}#fff3e0{% endif %};border:2px solid {% if current_user.pregnancy_vesetot_cancelled_at %}#27ae60{% else %}#f39c12{% endif %};margin-bottom:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+            <strong> בהריון</strong>
+            {% if current_user.pregnancy_due_date %}
+            <span style="margin-right:12px;font-size:14px;">
+                תאריך לידה משוער: <strong>{{ current_user.pregnancy_due_date }}</strong>
+            </span>
+            {% endif %}
+            {% if current_user.pregnancy_vesetot_cancelled_at %}
+            <div style="font-size:13px;color:#27ae60;margin-top:4px;">✅ עברו 90 יום — ווסתות בוטלו</div>
+            {% else %}
+            <div style="font-size:13px;color:#e67e22;margin-top:4px;">⏳ ווסתות יבוטלו ב-{{ pregnancy_cancel_date }}</div>
+            {% endif %}
+        </div>
+        <a href="/pregnancy/end" class="btn btn-danger" style="font-size:13px;padding:6px 14px;">סיום הריון</a>
+    </div>
+</div>
+{% else %}
+<div style="text-align:left;margin-bottom:16px;">
+    <a href="/pregnancy/start" style="font-size:13px;color:#3498db;text-decoration:none;"> אני בהריון</a>
+</div>
+{% endif %}
+
+{% if not current_user.pregnancy_active or not current_user.pregnancy_vesetot_cancelled_at %}
+<h2 style="margin-bottom:16px;">ווסתות צפויות</h2>
+{% if expected %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:32px;">
+    {% for e in expected %}
+    {% if e.type == 'onah_beinonit' %}{% set border_color = '#3498db' %}{% set type_label = 'עונה בינונית' %}
+    {% elif e.type == 'yom_hachodesh' %}{% set border_color = '#27ae60' %}{% set type_label = 'יום החודש' %}
+    {% elif e.type == 'haflagah' %}{% set border_color = '#9b59b6' %}{% set type_label = 'הפלגה' %}
+    {% elif e.type == 'kavua_yom_hachodesh' %}{% set border_color = '#e67e22' %}{% set type_label = '⭐ וסת קבועה — יום החודש' %}
+    {% elif e.type == 'kavua_haflagah' %}{% set border_color = '#e67e22' %}{% set type_label = '⭐ וסת קבועה — הפלגה' %}
+    {% elif e.type == 'or_zarua' %}{% set border_color = '#f39c12' %}{% set type_label = 'אור זרוע' %}
+    {% else %}{% set border_color = '#95a5a6' %}{% set type_label = e.type %}{% endif %}
+    <div class="card" style="border-right:4px solid {{ border_color }};">
+        <div style="font-size:12px;color:#666;margin-bottom:4px;">{{ type_label }}</div>
+        <div style="font-size:18px;font-weight:bold;margin-bottom:8px;">{{ e.hebrew_date }}</div>
+        <div style="font-size:13px;color:#555;">{{ e.gregorian_date }}</div>
+        <div style="margin-top:8px;">
+            <span class="onah-badge onah-{{ e.onah }}">עונת {{ 'יום' if e.onah == 'yom' else 'לילה' }}</span>
+        </div>
+        {% if e.get('haflagah_days') %}
+        <div style="font-size:12px;color:#666;margin-top:4px;">{{ e.haflagah_days }} ימים</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card"><p>אין ווסתות צפויות — הוסיפי וסת ראשונה</p></div>
+{% endif %}
+
+{% if active_kavuot %}
+<div class="card" style="background:#fff8e1;border:1px solid #ffc107;margin-bottom:24px;">
+    <strong>⭐ ווסתות קבועות פעילות:</strong>
+    {% for k in active_kavuot %}
+    <div style="margin-top:8px;font-size:14px;">
+        {% if k.type == 'yom_hachodesh' %}יום {{ k.hebrew_day_of_month }} לחודש —
+        {% else %}הפלגה {{ k.haflagah_days }} ימים —{% endif %}
+        עונת {{ 'יום' if k.onah == 'yom' else 'לילה' }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if last_veeset and last_veeset.tvila_date %}
+<div class="card" style="background:#e8f5e9;border:1px solid #27ae60;margin-bottom:24px;">
+    <strong>🌙 טבילה קרובה: ליל {{ last_veeset.tvila_date }}</strong>
+    {% if last_veeset.shiva_nekiim_start %}
+    <div style="font-size:13px;color:#555;margin-top:4px;">
+        7 נקיים: {{ last_veeset.shiva_nekiim_start }} — {{ last_veeset.tvila_date }}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2>היסטוריה</h2>
+    {% if not current_user.pregnancy_active or not current_user.pregnancy_vesetot_cancelled_at %}
+    <a href="/add_veeset" class="btn btn-success">+ הוסף וסת</a>
+    {% endif %}
+</div>
+<div class="card" style="overflow-x:auto;">
+    {% if vesetot %}
+    <table style="width:100%;border-collapse:collapse;min-width:650px;">
+        <thead>
+            <tr style="border-bottom:2px solid #eee;">
+                <th style="padding:8px;text-align:right;">תאריך עברי</th>
+                <th style="padding:8px;text-align:right;">תאריך לועזי</th>
+                <th style="padding:8px;text-align:right;">שעה</th>
+                <th style="padding:8px;text-align:right;">עונה</th>
+                <th style="padding:8px;text-align:right;">ימים</th>
+                <th style="padding:8px;text-align:right;">הפלגה</th>
+                <th style="padding:8px;text-align:right;">טבילה</th>
+                <th style="padding:8px;text-align:right;">פעולות</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in vesetot %}
+            <tr style="border-bottom:1px solid #eee;">
+                <td style="padding:8px;">{{ v.hebrew_date_str }}</td>
+                <td style="padding:8px;">{{ v.gregorian_date }}</td>
+                <td style="padding:8px;">{{ v.time_of_sighting }}</td>
+                <td style="padding:8px;">
+                    <span class="onah-badge onah-{{ v.onah }}">{{ 'יום' if v.onah == 'yom' else 'לילה' }}</span>
+                </td>
+                <td style="padding:8px;">{{ v.duration_days }}</td>
+                <td style="padding:8px;font-size:13px;color:#9b59b6;">
+                    {% if v.id in veeset_haflagah %}
+                        {{ veeset_haflagah[v.id] }} ימים
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td style="padding:8px;font-size:12px;">
+                    {% if v.tvila_date %}<span style="color:#27ae60;">🌙 {{ v.tvila_date }}</span>
+                    {% elif v.hefsek_date %}<span style="color:#f39c12;">הפסק: {{ v.hefsek_date }}</span>
+                    {% else %}<a href="/hefsek/{{ v.id }}" style="color:#3498db;">הפסק טהרה</a>{% endif %}
+                </td>
+                <td style="padding:8px;">
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <a href="/edit_veeset/{{ v.id }}" style="font-size:11px;padding:3px 8px;background:#3498db;color:white;border-radius:4px;text-decoration:none;">✏️</a>
+                        <a href="/end_veeset/{{ v.id }}" style="font-size:11px;padding:3px 8px;background:#f39c12;color:white;border-radius:4px;text-decoration:none;">🔚</a>
+                        <a href="/delete_veeset/{{ v.id }}"
+                           onclick="return confirm('למחוק?')"
+                           style="font-size:11px;padding:3px 8px;background:#e74c3c;color:white;border-radius:4px;text-decoration:none;">🗑️</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>אין ווסתות עדיין. <a href="/add_veeset">הוסיפי וסת ראשונה</a></p>
+    {% endif %}
+</div>
+{% endblock %}

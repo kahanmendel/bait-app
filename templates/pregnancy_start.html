@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}עדכון הריון{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;">
+    <h2 style="margin-bottom:8px;"> עדכון הריון</h2>
+    <p style="color:#666;margin-bottom:24px;font-size:14px;">
+        תאריך הלידה המשוער יחושב 40 שבועות מהראייה האחרונה.<br>
+        לאחר 90 יום יבוטלו כל הווסתות הצפויות והקבועות אוטומטית.
+    </p>
+
+    <form method="POST">
+        <div class="form-group">
+            <label>תאריך ראייה אחרונה (תחילת הריון)</label>
+            <input type="date" name="start_date"
+                   value="{{ default_date }}" required>
+            <small style="color:#666;">ברירת מחדל: הוסת האחרונה שדווחה</small>
+        </div>
+
+        <div style="background:#e8f5e9;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;" id="preview">
+        </div>
+
+        <button class="btn btn-success" style="width:100%">✅ אני בהריון — עדכן</button>
+        <a href="/" class="btn btn-danger" style="width:100%;text-align:center;margin-top:8px;display:block;">ביטול</a>
+    </form>
+</div>
+
+<script>
+function updatePreview() {
+    const d = document.querySelector('[name=start_date]').value;
+    if (!d) return;
+    const start = new Date(d);
+    const due = new Date(start.getTime() + 40 * 7 * 24 * 60 * 60 * 1000);
+    const cancel = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().split('T')[0];
+    document.getElementById('preview').innerHTML =
+        `📅 תאריך לידה משוער: <strong>${fmt(due)}</strong><br>` +
+        `🔕 ביטול ווסתות: <strong>${fmt(cancel)}</strong> (90 יום)`;
+}
+document.querySelector('[name=start_date]').addEventListener('change', updatePreview);
+updatePreview();
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+# סודות ומשתני סביבה
+.env
+.env.local
+
+# בסיס נתונים מקומי
+instance/
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pycd
+.venv/
+venv/
+env/
+*.egg-info/
+
+# כלים מקומיים / לוגים
+ngrok.exe
+logs.txt
+*.log
+
+# מערכת הפעלה / עורכים
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# פלט של gcloud (מצב השירות בענן, לא קוד מקור)
+service.yaml

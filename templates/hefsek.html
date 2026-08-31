@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}הפסק טהרה{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;">
+    <h2 style="margin-bottom:8px;">הפסק טהרה</h2>
+    <p style="color:#666;margin-bottom:24px;">
+        וסת מ-{{ veeset.hebrew_date_str }} | {{ veeset.gregorian_date }}
+    </p>
+
+    <div style="background:#fff3cd;padding:16px;border-radius:8px;margin-bottom:24px;">
+        <strong>📅 {{ hefsek_info.label }}</strong>
+        <p style="font-size:13px;color:#666;margin-top:8px;">
+            לפי מנהג {{ hefsek_info.minhag }}
+        </p>
+    </div>
+
+    {% if veeset.hefsek_date %}
+    <div style="background:#d4edda;padding:16px;border-radius:8px;margin-bottom:24px;">
+        <strong>✅ הפסק טהרה בוצע: {{ veeset.hefsek_date }}</strong><br>
+        <span>לילה ראשון של 7 נקיים: {{ veeset.shiva_nekiim_start }}</span><br>
+        <strong>🌙 טבילה: {{ veeset.tvila_date }}</strong>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="form-group">
+            <label>תאריך הפסק טהרה</label>
+            <input type="date" name="hefsek_date"
+                   value="{{ hefsek_info.hefsek_date }}"
+                   min="{{ hefsek_info.hefsek_date }}" required>
+            <small style="color:#666;">לא ניתן לפני {{ hefsek_info.hebrew_date }}</small>
+        </div>
+        <div class="form-group">
+            <label>שעה (לפני שקיעה {{ hefsek_info.before_shkia }})</label>
+            <input type="time" name="hefsek_time"
+                   value="{{ hefsek_info.before_shkia }}" max="{{ hefsek_info.before_shkia }}">
+        </div>
+        <button class="btn btn-success" style="width:100%">
+            {% if veeset.hefsek_date %}עדכן הפסק טהרה{% else %}בצעתי הפסק טהרה{% endif %}
+        </button>
+    </form>
+</div>
+{% endblock %}

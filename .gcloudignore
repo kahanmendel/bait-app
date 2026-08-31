@@ -1,0 +1,9 @@
+.gcloudignore
+.git
+__pycache__/
+*.pyc
+*.pyo
+.env
+instance/
+*.db
+test_kavua.py

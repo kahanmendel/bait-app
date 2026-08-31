@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}עריכת וסת{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;">
+    <h2 style="margin-bottom:8px;">עריכת וסת</h2>
+    <p style="color:#e74c3c;font-size:13px;margin-bottom:24px;">
+        ⚠️ שינוי וסת יגרום לחישוב מחדש של כל הקבועות
+    </p>
+    <form method="POST">
+        <div class="form-group">
+            <label>תאריך ראייה</label>
+            <input type="date" name="date"
+                   value="{{ veeset.gregorian_date }}" required>
+        </div>
+        <div class="form-group">
+            <label>שעת ראייה</label>
+            <input type="time" name="time"
+                   value="{{ veeset.time_of_sighting }}" required>
+        </div>
+        <div class="form-group">
+            <label>אורך הוסת (ימים)</label>
+            <input type="number" name="duration_days"
+                   value="{{ veeset.duration_days }}" min="1" max="14">
+        </div>
+        <div class="form-group">
+            <label>הערות</label>
+            <textarea name="notes" rows="3">{{ veeset.notes or '' }}</textarea>
+        </div>
+        <div style="display:flex;gap:12px;">
+            <button class="btn btn-primary" style="flex:1">שמור שינויים</button>
+            <a href="/" class="btn btn-danger" style="flex:1;text-align:center;">ביטול</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

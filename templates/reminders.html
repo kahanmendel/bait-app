@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}תזכורות אישיות{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2>תזכורות אישיות</h2>
+    <a href="/reminders/add" class="btn btn-success">+ הוסף תזכורת</a>
+</div>
+
+{% if reminders %}
+<div style="display:grid;gap:12px;">
+    {% for r in reminders %}
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+            <strong>{{ r.title }}</strong>
+            <div style="font-size:13px;color:#666;margin-top:4px;">
+                {{ r.gregorian_date }} בשעה {{ r.time_of_day }}
+            </div>
+            {% if r.message %}
+            <div style="font-size:13px;margin-top:4px;">{{ r.message }}</div>
+            {% endif %}
+            <span style="font-size:12px;background:#e8f4f8;padding:2px 8px;border-radius:10px;">
+                {{ recurrence_labels[r.recurrence] }}
+            </span>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <a href="/reminders/edit/{{ r.id }}"
+               style="font-size:12px;padding:6px 12px;background:#3498db;color:white;border-radius:6px;text-decoration:none;">
+               ✏️ עריכה
+            </a>
+            <a href="/reminders/delete/{{ r.id }}"
+               onclick="return confirm('למחוק תזכורת זו?')"
+               style="font-size:12px;padding:6px 12px;background:#e74c3c;color:white;border-radius:6px;text-decoration:none;">
+               🗑️ מחיקה
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card"><p>אין תזכורות אישיות. <a href="/reminders/add">הוסף תזכורת</a></p></div>
+{% endif %}
+{% endblock %}

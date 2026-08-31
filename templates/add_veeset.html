@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}הוספת וסת{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;">
+    <h2 style="margin-bottom:24px;">הוספת וסת חדשה</h2>
+    <form method="POST">
+        <div class="form-group">
+            <label>תאריך ראייה</label>
+            <input type="date" name="date" required>
+        </div>
+        <div class="form-group">
+            <label>שעת ראייה</label>
+            <input type="time" name="time" required>
+            <small style="color:#666;">המערכת תקבע את העונה (יום/לילה) אוטומטית</small>
+        </div>
+        <div class="form-group">
+            <label>אורך הוסת (ימים)</label>
+            <input type="number" name="duration_days" value="1" min="1" max="14">
+        </div>
+        <div class="form-group">
+            <label>הערות (אופציונלי)</label>
+            <textarea name="notes" rows="3"></textarea>
+        </div>
+        <button class="btn btn-success" style="width:100%">שמור וסת</button>
+    </form>
+</div>
+{% endblock %}

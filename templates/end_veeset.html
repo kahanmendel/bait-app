@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}עדכון סיום ראייה{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;">
+    <h2 style="margin-bottom:8px;">עדכון סיום ראייה</h2>
+    <p style="color:#666;margin-bottom:24px;">
+        וסת שהתחילה: {{ veeset.hebrew_date_str }} | {{ veeset.gregorian_date }} {{ veeset.time_of_sighting }}
+    </p>
+
+    <form method="POST">
+        <div class="form-group">
+            <label>תאריך סיום ראייה</label>
+            <input type="date" name="end_date"
+                   value="{{ veeset.gregorian_date }}"
+                   min="{{ veeset.gregorian_date }}" required>
+        </div>
+        <div class="form-group">
+            <label>שעת סיום</label>
+            <input type="time" name="end_time" id="end_time" required>
+            <small style="color:#666;">הזן את השעה המדויקת, או לחץ "עכשיו"</small>
+        </div>
+        <button type="button" class="btn btn-primary"
+                style="width:100%;margin-bottom:12px;"
+                onclick="setNow()">
+            🕐 עכשיו
+        </button>
+        <button class="btn btn-success" style="width:100%">שמור סיום ראייה</button>
+    </form>
+</div>
+
+<script>
+function setNow() {
+    const now = new Date();
+    const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
+                    now.getMinutes().toString().padStart(2,'0');
+    const dateStr = now.getFullYear() + '-' +
+                    (now.getMonth()+1).toString().padStart(2,'0') + '-' +
+                    now.getDate().toString().padStart(2,'0');
+    document.querySelector('[name=end_date]').value = dateStr;
+    document.getElementById('end_time').value = timeStr;
+}
+</script>
+{% endblock %}

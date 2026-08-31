@@ -1,0 +1,98 @@
+
+{% extends "base.html" %}
+{% block title %}הגדרות{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;margin:0 auto;">
+    <h2 style="margin-bottom:24px;">הגדרות</h2>
+    <form method="POST">
+
+        <h3 style="margin-bottom:12px;color:#2c3e50;">📍 מיקום ושעות</h3>
+        <div class="form-group">
+            <label>שם עיר</label>
+            <input type="text" name="location_name" value="{{ current_user.location_name or 'ירושלים' }}">
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="use_auto_times" {% if current_user.use_auto_times %}checked{% endif %}>
+                חישוב שעות נץ/שקיעה אוטומטי לפי מיקום
+            </label>
+        </div>
+        <div id="manual_times" style="{% if current_user.use_auto_times %}display:none{% endif %}">
+            <div class="form-group">
+                <label>שעת הנץ (HH:MM)</label>
+                <input type="time" name="custom_hanetz" value="{{ current_user.custom_hanetz or '' }}">
+            </div>
+            <div class="form-group">
+                <label>שעת שקיעה (HH:MM)</label>
+                <input type="time" name="custom_shkia" value="{{ current_user.custom_shkia or '' }}">
+            </div>
+        </div>
+
+        <hr style="margin:24px 0;">
+        <h3 style="margin-bottom:12px;color:#2c3e50;">⚙️ מנהגים</h3>
+
+        <div class="form-group" style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px;">
+            <label>
+                <input type="checkbox" name="minhag_or_zarua"
+                    {% if current_user.minhag_or_zarua %}checked{% endif %}>
+                <strong>עונת האור זרוע</strong>
+            </label>
+            <p style="font-size:12px;color:#666;margin-top:4px;">שמירת העונה שלפני כל יום פרישה</p>
+        </div>
+
+        <div class="form-group" style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px;">
+            <label>
+                <input type="checkbox" name="minhag_shmirah_kefulah"
+                    {% if current_user.minhag_shmirah_kefulah %}checked{% endif %}>
+                <strong>שמירה כפולה</strong>
+            </label>
+            <p style="font-size:12px;color:#666;margin-top:4px;">אם ראתה באותו יום צפוי — שומרת שוב לחודש הבא / הפלגה הבאה</p>
+        </div>
+
+        <div class="form-group" style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px;">
+            <label>
+                <input type="checkbox" name="minhag_tikou"
+                    {% if current_user.minhag_tikou %}checked{% endif %}>
+                <strong>מנהג "תיקו" בוסת קבועה</strong>
+            </label>
+            <p style="font-size:12px;color:#666;margin-top:4px;">אם ראתה לפני הקבועה וזה המשיך לתוך יום הקבועה — לא סופר כביטול ולא כפספוס</p>
+        </div>
+
+        <hr style="margin:24px 0;">
+        <h3 style="margin-bottom:12px;color:#2c3e50;">🔔 תזכורות</h3>
+
+        <div class="form-group">
+            <label>מספר טלפון (ימות המשיח)</label>
+            <input type="tel" name="yemot_phone" value="{{ current_user.yemot_phone or '' }}"
+                   placeholder="05X-XXXXXXX">
+        </div>
+        <div class="form-group">
+            <label>שעות לפני לקבל תזכורת</label>
+            <select name="reminder_hours_before">
+                {% for h in [6, 12, 24, 48] %}
+                <option value="{{ h }}" {% if current_user.reminder_hours_before == h %}selected{% endif %}>
+                    {{ h }} שעות לפני
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <hr style="margin:24px 0;">
+        <h3 style="margin-bottom:12px;color:#2c3e50;">🔑 מפתח API</h3>
+        <div class="form-group">
+            <label>מפתח לחיבור ימות המשיח</label>
+            <input type="text" value="{{ current_user.api_key }}" readonly
+                   style="font-family:monospace;font-size:12px;background:#f0f0f0;">
+            <small style="color:#666;">שלח מפתח זה לימות המשיח. אל תשתף אותו עם אחרים.</small>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-top:8px;">שמור הגדרות</button>
+    </form>
+</div>
+
+<script>
+document.querySelector('[name=use_auto_times]').addEventListener('change', function() {
+    document.getElementById('manual_times').style.display = this.checked ? 'none' : 'block';
+});
+</script>
+{% endblock %}

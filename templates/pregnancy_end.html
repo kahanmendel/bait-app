@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}סיום הריון{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:0 auto;text-align:center;">
+    <h2 style="margin-bottom:16px;">סיום הריון</h2>
+    <p style="color:#666;margin-bottom:24px;">
+        לאחר אישור, המערכת תחזור לחישוב ווסתות רגיל.<br>
+        כדי לחשב ווסתות מחדש — הוסיפי את הוסת הראשונה לאחר הלידה.
+    </p>
+    <form method="POST">
+        <button class="btn btn-primary" style="width:100%;margin-bottom:12px;">
+            ✅ הריון הסתיים — חזרי לחישוב רגיל
+        </button>
+        <a href="/" class="btn btn-danger" style="width:100%;display:block;text-align:center;">ביטול</a>
+    </form>
+</div>
+{% endblock %}
