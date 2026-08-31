@@ -1,4 +1,4 @@
-.gcloudignore
+﻿.gcloudignore
 .git
 __pycache__/
 *.pyc
@@ -7,3 +7,4 @@ __pycache__/
 instance/
 *.db
 test_kavua.py
+test_yemot.py

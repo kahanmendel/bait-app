@@ -38,6 +38,7 @@ def create_app():
         from routes.cron import cron_bp
         from routes.pregnancy import pregnancy_bp
         from routes.admin import admin_bp
+        from routes.yemot import yemot_bp
 
         app.register_blueprint(auth_bp)
         app.register_blueprint(veeset_bp)
@@ -48,6 +49,7 @@ def create_app():
         app.register_blueprint(cron_bp)
         app.register_blueprint(pregnancy_bp)
         app.register_blueprint(admin_bp)
+        app.register_blueprint(yemot_bp)
 
         try:
             db.create_all()

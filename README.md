@@ -48,3 +48,22 @@ python main.py            # http://127.0.0.1:5000
 | `/api/*` | REST/JSON — אימות ב-`X-API-Key` או `X-Session-Token` |
 | `/yemot/*` | שלוחות ימות המשיח — פרוטוקול טקסט של ymgateway |
 | `/cron/*` | Cloud Scheduler — אימות ב-`Authorization: Bearer $CRON_SECRET` |
+
+### הגדרת השלוחה בימות המשיח
+
+בממשק הניהול של ימות, בשלוחה הרצויה:
+
+```ini
+type=api
+api_link=https://bait-app-602446976212.europe-west1.run.app/yemot?secret=<YEMOT_API_SECRET>
+```
+
+ימות מזהה את המתקשרת לפי `ApiPhone`, ולכן המספר חייב להיות רשום אצלה כ-`phone`
+או כ-`phone_husband`. אחרי הזדהות בקוד האישי נפתח תפריט:
+דיווח ראייה חדשה, ימי פרישה קרובים, פרטי הראייה האחרונה, ותזכורות קרובות.
+
+בדיקה מקומית של הזרימה במלואה:
+
+```bash
+python test_yemot.py
+```
