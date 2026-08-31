@@ -1,10 +1,15 @@
-﻿.gcloudignore
+.gcloudignore
 .git
+.gitignore
+.gitattributes
 __pycache__/
 *.pyc
 *.pyo
 .env
 instance/
 *.db
+ngrok.exe
+logs.txt
+service.yaml
 test_kavua.py
 test_yemot.py
