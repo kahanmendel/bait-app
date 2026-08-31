@@ -55,6 +55,17 @@ def _normalize_phone(raw):
     return (raw or '').strip().replace('-', '').replace(' ', '').replace('+972', '0')
 
 
+def _received_secret(values):
+    """
+    הסוד המשותף כפי שהגיע מימות.
+
+    הדרך הנכונה להעביר אותו היא api_add_0=secret=... בהגדרות השלוחה. אם
+    מגדירים אותו בתוך api_link כ-query string, ימות מצרפת את הפרמטרים שלה
+    בסימן שאלה נוסף במקום ב-'&', והערך מגיע כ-'<הסוד>?ApiCallId=...'.
+    """
+    return (values.get('secret') or '').split('?', 1)[0]
+
+
 def _find_user(phone):
     """מאתר משתמשת לפי מספר המתקשר — שלה או של בעלה."""
     if not phone:
@@ -109,9 +120,9 @@ def yemot_gateway():
     if values.get('hangup') == 'yes':
         return _reply('')
 
-    # אימות שהבקשה אכן מימות — סוד משותף שמוגדר ב-api_link
+    # אימות שהבקשה אכן מימות — סוד משותף שמוגדר ב-api_add_0
     secret = os.getenv('YEMOT_API_SECRET')
-    if secret and values.get('secret') != secret:
+    if secret and _received_secret(values) != secret:
         current_app.logger.warning('yemot: bad or missing secret')
         return _reply(_end(y.t('שגיאת הגדרה במערכת')))
 

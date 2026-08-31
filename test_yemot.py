@@ -63,6 +63,11 @@ check('unknown caller', response.get_data(as_text=True),
 response = client.get('/yemot', query_string={'secret': 'wrong', 'ApiPhone': PHONE})
 check('bad secret', response.get_data(as_text=True), ['שגיאת הגדרה'])
 
+# ימות מצרפת את הפרמטרים שלה בסימן שאלה נוסף כשהסוד נמצא בתוך api_link
+response = client.get('/yemot?secret=' + SECRET + '?ApiCallId=abc&ApiPhone=' + PHONE)
+check('secret with appended query', response.get_data(as_text=True),
+      ['read=', 'pin,no,8,4,7,No,no,no,,,3,,,'])
+
 response = client.get('/yemot', query_string={'secret': SECRET, 'ApiPhone': PHONE,
                                               'hangup': 'yes'})
 assert response.get_data(as_text=True) == '', 'hangup should return empty'

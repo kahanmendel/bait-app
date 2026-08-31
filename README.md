@@ -55,8 +55,30 @@ python main.py            # http://127.0.0.1:5000
 
 ```ini
 type=api
-api_link=https://bait-app-602446976212.europe-west1.run.app/yemot?secret=<YEMOT_API_SECRET>
+api_link=https://bait-app-602446976212.europe-west1.run.app/yemot
+api_add_0=secret=<YEMOT_API_SECRET>
+api_phone_send=yes
+api_call_id_send=yes
+api_did_send=yes
+api_wait_answer_music_on_hold=yes
+say_api_answer=no
+api_log=yes
+api_end_goto=/
 ```
+
+- הסוד עובר ב-`api_add_0` ולא בתוך `api_link`. ימות מצרפת את הפרמטרים שלה
+  בסימן שאלה נוסף במקום ב-`&`, ולכן query string ב-`api_link` מגיע מעוות
+  (`secret=<הסוד>?ApiCallId=...`). השרת חוסם זאת ממילא, אבל ההגדרה הנכונה
+  היא `api_add_0`.
+- `api_phone_send=yes` הכרחי — בלי מספר המתקשרת אין זיהוי בכלל.
+- `say_api_answer` חייב להיות `no`, אחרת ימות תקריא את הפקודות עצמן במקום
+  לבצע אותן. שווה להדליק זמנית רק לדיבוג.
+- נקודה היא מפריד בין הודעות, ולכן `logic/yemot.py` מסיר אותה ואת שאר
+  התווים האסורים מכל טקסט TTS.
+- בכל שדה ב-`read=` נשלח ערך מפורש. שדה ריק באמצע נקרא כאפס, ו-`sec_wait`
+  ריק פירושו שהשיחה תתנתק מיד אחרי ההודעה.
+- לאבחון: `Log/LogApi.ymgr` בספריית ימות מציג כל בקשה ותשובה, כאשר `=`
+  מוצג כ-`^`, `&` כ-`*` ו-`,` כ-`>`.
 
 ימות מזהה את המתקשרת לפי `ApiPhone`, ולכן המספר חייב להיות רשום אצלה כ-`phone`
 או כ-`phone_husband`. אחרי הזדהות בקוד האישי נפתח תפריט:
