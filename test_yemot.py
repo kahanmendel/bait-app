@@ -80,7 +80,7 @@ check('bad pin', call(client, pin='9999'), ['שגוי', 'go_to_folder=hangup'])
 check('main menu', call(client, pin='1234'),
       ['שלום שרה', 'menu,no,1,1,7,No,no,no,,1.2.3.4.5.6.9,,,,'])
 check('last, empty', call(client, pin='1234', menu='3'),
-      ['אין ראיות רשומות', 'go_to_folder=hangup'])
+      ['אין ראיות רשומות', 'menu,no'])
 
 check('report step when', call(client, pin='1234', menu='1'),
       ['rep_when,no,1,1,7,No,no,no,,1.2.3,,,,'])
@@ -122,11 +122,11 @@ with app.app_context():
           saved[0].onah)
 
 check('last', call(client, pin='1234', menu='3'),
-      ['האחרונה', 'dateH-', 'go_to_folder=hangup'])
+      ['האחרונה', 'dateH-', 'menu,no'])
 check('upcoming', call(client, pin='1234', menu='2'),
-      ['ימי הפרישה הקרובים', 'go_to_folder=hangup'])
+      ['ימי הפרישה הקרובים', 'menu,no'])
 check('reminders', call(client, pin='1234', menu='4'),
-      ['אין תזכורות', 'go_to_folder=hangup'])
+      ['אין תזכורות', 'menu,no'])
 check('exit', call(client, pin='1234', menu='9'), ['להתראות', 'go_to_folder=hangup'])
 
 print('\n=== 5 — הוספת תזכורת ===')
@@ -152,7 +152,7 @@ with app.app_context():
     print('  ok  reminder stored with the formatted time parsed correctly')
 
 check('reminders now lists it', call(client, pin='1234', menu='4'),
-      ['טבילה', 'go_to_folder=hangup'])
+      ['טבילה', 'menu,no'])
 
 print('\n=== 6 — הגדרות ===')
 check('settings menu', call(client, pin='1234', menu='6'),
@@ -181,13 +181,30 @@ with app.app_context():
     print('  ok  sfira and reminder hours persisted')
 
 
-# אף ענף לא רשאי להחזיר read על menu: ימות אינה דורסת ערך שכבר נאסף אלא
-# מוסיפה עותק, ולכן חזרה לתפריט מכניסה את השיחה ללולאה אינסופית
-for choice in ('2', '3', '4', '9'):
+print('\n=== חזרה לתפריט מול ניתוק ===')
+# ענף שקורא מידע חוזר לתפריט, וחייב לשאול אותו מחדש עם re_enter=no
+for choice in ('2', '3', '4'):
     answer = call(client, pin='1234', menu=choice)
-    assert 'menu,' not in answer, f'menu={choice} loops back to the menu: {answer}'
-    assert 'go_to_folder=hangup' in answer, f'menu={choice} does not end the call'
-print('\n--- no branch loops back to the menu --- ok')
+    assert 'menu,no,' in answer, f'menu={choice} must re-ask the menu: {answer}'
+    assert 'menu,yes' not in answer, f'menu={choice} would reuse the old choice'
+print('  ok  ענפי קריאה חוזרים לתפריט ושואלים מחדש')
+
+# ענף שכותב נתונים חייב לנתק, אחרת ערכי הביניים שלו יגרמו לכתיבה נוספת
+for params in ({'menu': '1', 'rep_when': '1', 'rep_time': '1430', 'rep_confirm': '1'},
+               {'menu': '5', 'rem_title': '3', 'rem_when': '1', 'rem_time': '0900'},
+               {'menu': '6', 'set_menu': '4', 'set_value': '1'}):
+    answer = call(client, pin='1234', **params)
+    assert 'go_to_folder=hangup' in answer, f'{params} must end the call: {answer}'
+    assert 'menu,' not in answer, f'{params} must not return to the menu'
+print('  ok  ענפי כתיבה מסתיימים בניתוק')
+
+# בלם הלולאה — אם ימות מחזירה את אותה בחירה שוב ושוב במקום לשאול
+runaway = client.get('/yemot?secret=' + SECRET + '&ApiPhone=' + PHONE
+                     + '&pin=1234' + '&menu=2' * 40)
+answer = runaway.get_data(as_text=True)
+assert 'אירעה תקלה' in answer and 'go_to_folder=hangup' in answer, answer
+assert 'menu,' not in answer, 'the breaker must not hand back another menu'
+print('  ok  הבלם עוצר לולאה במקום להחזיר תפריט נוסף')
 
 # ימות שולחת את הערך שוב ושוב באותה שיחה; הערך הקובע הוא האחרון
 duplicated = client.get('/yemot?secret=' + SECRET + '&ApiPhone=' + PHONE

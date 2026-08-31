@@ -11,10 +11,14 @@
 הזרימה כאן היא פונקציה של הפרמטרים שהתקבלו: כל שלב מזוהה לפי אילו משתנים
 כבר קיימים בבקשה. ראה logic/yemot.py לתיאור הפרוטוקול.
 
-ערך שנקרא בשיחה נשאר בה עד סופה, ואין דרך מתועדת לנקות אותו: קריאה חוזרת
-עם re_enter מוסיפה עותק נוסף במקום לדרוס. לכן הזרימה ליניארית בכוונה — כל
-ענף מסתיים בניתוק ולא בחזרה לתפריט. חזרה לתפריט אחרי פעולה יוצרת לולאה
-אינסופית, כי הבחירה הישנה ממשיכה להגיע בכל בקשה ולהיכנס שוב לאותו ענף.
+שים לב לשם המטעה של re_enter_if_exists: ברירת המחדל 'no' גורמת לימות לשאול
+את המשתנה מחדש, ואילו 'yes' אומר לה להשתמש בערך שכבר נאסף ולא להמתין להקשה.
+לכן תפריט שנשלח עם 'yes' חוזר אלינו מיד עם הבחירה הישנה, נכנס שוב לאותו ענף
+ויוצר לולאה במהירות מכונה.
+
+ענף שרק קורא מידע חוזר לתפריט, כי המשתנה היחיד המעורב בו הוא menu והוא
+נשאל מחדש. ענף שכותב נתונים מסתיים בניתוק: אין פקודה מתועדת שמנקה ערך
+שכבר נאסף, וערכי הביניים שלו היו נשארים בשיחה וגורמים לכתיבה נוספת.
 """
 import os
 import re
@@ -40,6 +44,9 @@ UPCOMING_LIMIT = 3
 REMINDERS_LIMIT = 3
 # ניסיונות PIN לפני ניתוק
 PIN_ATTEMPTS = 3
+# תקרת חזרות לתפריט באותה שיחה. מתקשר אמיתי לא מתקרב אליה, אבל אם ימות
+# תחזיר בחירה ישנה במקום לשאול מחדש היא עוצרת לולאה תוך סיבוב אחד
+MAX_MENU_ROUNDS = 12
 
 VESET_TYPE_NAMES = {
     'onah_beinonit': 'עונה בינונית',
@@ -89,8 +96,9 @@ def _value(values, name):
     """
     הערך האחרון שהתקבל למשתנה שנקרא ב-read.
 
-    ימות מצרפת בכל בקשה את כל הערכים שנאספו בשיחה, וכשקוראים משתנה בשנית
-    היא מוסיפה עותק נוסף במקום לדרוס את הקודם. הערך העדכני הוא האחרון.
+    ימות מצרפת בכל בקשה את כל הערכים שנאספו בשיחה, ובקריאה חוזרת של אותו
+    משתנה נצפה עותק נוסף לצד הישן ולא דריסה שלו. בשני המקרים הערך העדכני
+    הוא האחרון ברשימה.
     """
     collected = values.getlist(name)
     return collected[-1] if collected else None
@@ -203,6 +211,12 @@ def yemot_gateway():
     if not menu:
         return _reply(_main_menu(greet=user.name))
 
+    # בלם: אם התפריט חוזר אלינו שוב ושוב בלי שהמתקשרת בחרה מחדש, מסיימים
+    # במקום להמשיך להחזיר אותו
+    if len(values.getlist('menu')) > MAX_MENU_ROUNDS:
+        current_app.logger.warning('yemot: menu round limit reached')
+        return _reply(_end(y.t('אירעה תקלה'), y.t('נא להתקשר שוב')))
+
     if menu == '1':
         return _reply(_flow_report(user, values))
     if menu == '2':
@@ -220,11 +234,17 @@ def yemot_gateway():
     return _reply(_end(y.t('להתראות')))
 
 
-def _main_menu(greet=None):
-    """התפריט הראשי. נקרא פעם אחת בשיחה — כל ענף מסתיים בניתוק."""
-    parts = []
+def _main_menu(*messages, greet=None):
+    """
+    התפריט הראשי, אחרי הודעות פתיחה אם יש.
+
+    re_enter נשאר בברירת המחדל 'no' כדי שימות תשאל את הבחירה מחדש. הערך
+    'yes' היה גורם לה להחזיר את הבחירה הקודמת בלי להמתין להקשה, וכך נוצרה
+    הלולאה.
+    """
+    parts = list(messages)
     if greet:
-        parts.append(y.t('שלום ' + greet))
+        parts.insert(0, y.t('שלום ' + greet))
     parts += [
         y.t('לדיווח ראייה חדשה הקישי 1'),
         y.t('לימי פרישה קרובים הקישי 2'),
@@ -392,17 +412,17 @@ def _flow_upcoming(user):
     # אותו חישוב שהלוח הראשי מציג — כולל קבועות וביטול ווסתות בהריון
     vesetot, expected, _ = get_user_expected(user)
     if not vesetot:
-        return _end(y.t('אין ראיות רשומות במערכת'))
+        return _main_menu(y.t('אין ראיות רשומות במערכת'))
 
     today = date.today()
     upcoming = [e for e in expected if e['gregorian_date'] >= today][:UPCOMING_LIMIT]
     if not upcoming:
-        return _end(y.t('אין ימי פרישה קרובים'),
-                    y.t('יתכן שהראייה האחרונה ישנה ויש לדווח על ראייה חדשה'))
+        return _main_menu(y.t('אין ימי פרישה קרובים'),
+                          y.t('יתכן שהראייה האחרונה ישנה ויש לדווח על ראייה חדשה'))
 
     parts = [y.t('ימי הפרישה הקרובים')]
     parts += [_describe_expected(item) for item in upcoming]
-    return _end(*parts)
+    return _main_menu(*parts)
 
 
 # ===== 3 — הראייה האחרונה =====
@@ -411,9 +431,9 @@ def _flow_last(user):
     veeset = Veeset.query.filter_by(user_id=user.id)\
                          .order_by(Veeset.gregorian_date.desc()).first()
     if not veeset:
-        return _end(y.t('אין ראיות רשומות במערכת'))
+        return _main_menu(y.t('אין ראיות רשומות במערכת'))
 
-    return _end(
+    return _main_menu(
         y.t('הראייה האחרונה נרשמה בתאריך'),
         y.h_date(veeset.gregorian_date),
         y.t('בשעה'),
@@ -634,9 +654,9 @@ def _flow_reminders(user):
                               .order_by(Reminder.gregorian_date)\
                               .limit(REMINDERS_LIMIT).all()
     if not reminders:
-        return _end(y.t('אין תזכורות קרובות'))
+        return _main_menu(y.t('אין תזכורות קרובות'))
 
     parts = [y.t('התזכורות הקרובות')]
     parts += [y.msgs(y.g_date(r.gregorian_date), y.t(r.title or 'תזכורת'))
               for r in reminders]
-    return _end(*parts)
+    return _main_menu(*parts)
