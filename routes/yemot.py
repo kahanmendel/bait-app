@@ -192,6 +192,9 @@ def yemot_gateway():
         return _reply(_flow_register(phone, values))
 
     if not user.is_approved:
+        if user.status == 'rejected':
+            return _reply(_end(y.t('החשבון שלך נחסם'),
+                               y.t('נא לפנות למנהל המערכת')))
         return _reply(_end(y.t('החשבון שלך ממתין לאישור המנהל')))
 
     # ===== שלב 1: קוד PIN =====

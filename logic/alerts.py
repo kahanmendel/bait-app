@@ -122,6 +122,36 @@ def _deliver(config, subject, body):
             pass
 
 
+def send_email(subject, body):
+    """
+    שולח מייל יחיד, בלי איחוד ובלי רישום. מחזיר (האם יצא, הסבר).
+
+    ההסבר מיועד להצגה למנהל — נתיב הדוח מחזיר אותו כדי שלא יצטרך לחפש בלוג
+    למה המייל לא הגיע.
+    """
+    config = _config()
+    missing = _missing(config)
+    if missing:
+        # לא נופלים בשקט: אם השליחה לא מוגדרת, זה עצמו צריך לצעוק בלוג
+        reason = 'שליחת המייל אינה מוגדרת (חסר {})'.format(', '.join(missing))
+        _log('error', f'alerts: {reason}. ההודעה: {subject}')
+        return False, reason
+
+    try:
+        _deliver(config, subject, body)
+    except (smtplib.SMTPException, socket.error, OSError) as exc:
+        reason = f'{exc.__class__.__name__}: {exc}'
+        _log('error', f'alerts: השליחה נכשלה ({reason}). ההודעה: {subject}')
+        return False, reason
+    except Exception as exc:
+        reason = str(exc)
+        _log('error', f'alerts: השליחה נכשלה ({reason}). ההודעה: {subject}')
+        return False, reason
+
+    _log('info', f'alerts: נשלח מייל — {subject}')
+    return True, f'נשלח אל {config["to"]}'
+
+
 def send_alert(subject, body, *, key,
                min_interval_hours=DEFAULT_MIN_INTERVAL_HOURS) -> bool:
     """
@@ -129,30 +159,15 @@ def send_alert(subject, body, *, key,
 
     key מזהה את סוג התקלה לצורך איחוד. subject ו-body הם טקסט חופשי.
     """
-    config = _config()
-    missing = _missing(config)
-    if missing:
-        # לא נופלים בשקט: אם ההתראות לא מוגדרות, זה עצמו צריך לצעוק בלוג
-        _log('error', 'alerts: ההתראות אינן מוגדרות (חסר {}). התקלה: {}'
-                      .format(', '.join(missing), subject))
+    if _missing(_config()):
+        # חוסר הגדרה מדווח כבר ב-send_email, ואין מה לרשום כניסיון
+        send_email(subject, body)
         return False
 
     if _recently_sent(key, min_interval_hours):
         _log('info', f'alerts: התראה על {key} נשלחה לאחרונה, מאוחד')
         return False
 
-    try:
-        _deliver(config, subject, body)
-    except (smtplib.SMTPException, socket.error, OSError) as exc:
-        _log('error', f'alerts: שליחת ההתראה נכשלה ({exc.__class__.__name__}: {exc}). '
-                      f'התקלה: {subject}')
-        _record(key, subject, delivered=False)
-        return False
-    except Exception as exc:
-        _log('error', f'alerts: שליחת ההתראה נכשלה ({exc}). התקלה: {subject}')
-        _record(key, subject, delivered=False)
-        return False
-
-    _log('info', f'alerts: נשלחה התראה על {key}')
-    _record(key, subject, delivered=True)
-    return True
+    delivered, _reason = send_email(subject, body)
+    _record(key, subject, delivered=delivered)
+    return delivered

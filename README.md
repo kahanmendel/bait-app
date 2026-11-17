@@ -91,6 +91,51 @@ python main.py            # http://127.0.0.1:5000
 ב-Gmail נדרשת **App Password** ולא סיסמת החשבון, והחשבון חייב 2FA.
 `SMTP_PASSWORD` שייך ל-Secret Manager; שאר ההגדרות אינן סודות.
 
+## דוח מנויים
+
+לכל חשבון שלושה מצבים, ב-`User.status`:
+
+| מצב | איך נוצר | `is_approved` | `rejected_at` |
+|---|---|---|---|
+| `approved` — מחובר | המנהל אישר | `True` | ריק |
+| `pending` — ממתין לאישור | נרשם ועוד לא אושר | `False` | ריק |
+| `rejected` — נדחה | המנהל חסם | `False` | חותמת זמן |
+
+**עד הוספת `rejected_at` שני המצבים האחרונים היו זהים בבסיס הנתונים** —
+`/admin/reject` רק כיבה את `is_approved`, ולכן חשבון שנדחה נראה בדיוק כמו
+חשבון שטרם אושר, גם במסך הניהול וגם בהודעה שהמתקשרת שמעה. כעת חשבון שנדחה
+שומע בטלפון "החשבון שלך נחסם" ולא "ממתין לאישור", וחשבון שאושר מחדש מנוקה
+מהסימון.
+
+`is_approved` נשאר השער בכל הכניסות — באתר, ב-API וב-`/yemot` — ולכן ההפרדה
+לא שינתה מי נכנס ומי לא.
+
+### שליחת הדוח
+
+- **כפתור** במסך `/admin`: "שלח דוח מנויים למייל". מציג אם המייל יצא, ואם לא
+  — את הסיבה, בלי לחפש בלוג.
+- **נתיב** `POST /cron/users-report` (גם GET), מאומת ב-`CRON_SECRET` כמו שאר
+  נתיבי ה-cron. מחזיר 200 עם `success` ו-`detail`, או 502 בכשל שליחה כדי
+  ש-Cloud Scheduler ינסה שוב.
+
+הדוח מפרט לכל חשבון: שם, שני הטלפונים, סימון מנהל, תאריך הרשמה, תאריך דחייה
+אם נדחה, מספר הראיות והאחרונה שבהן, כמה ראיות דורשות אימות עונה, והריון פעיל.
+
+דוח שבועי קבוע:
+
+```bash
+gcloud scheduler jobs create http bait-app-users-report \
+  --location=europe-west1 \
+  --schedule="0 8 * * 0" \
+  --time-zone="Asia/Jerusalem" \
+  --uri="https://bait-app-602446976212.europe-west1.run.app/cron/users-report" \
+  --http-method=POST \
+  --headers="Authorization=Bearer <CRON_SECRET>"
+```
+
+הדוח משתמש באותה הגדרת SMTP של ההתראות, ולכן שליחה מוצלחת שלו היא גם
+האישור שההתראות עובדות.
+
 ## ממשקים חיצוניים
 
 | נתיב | תיאור |
@@ -185,4 +230,8 @@ python test_accounts.py
 
 ```bash
 python test_zmanim.py
+```
+
+```bash
+python test_reports.py
 ```

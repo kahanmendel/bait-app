@@ -11,6 +11,8 @@ from sqlalchemy import inspect, text
 ADDED_COLUMNS = {
     'users': {
         'pin_hash_husband': 'VARCHAR(256)',
+        # ריק ברשומות קיימות, ולכן הן נקראות כממתינות ולא כנדחות
+        'rejected_at': 'TIMESTAMP',
     },
     'vesetot': {
         # רשומות קיימות מקבלות NULL, והקוד מתייחס אליו כאל False

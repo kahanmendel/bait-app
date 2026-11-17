@@ -18,7 +18,11 @@ def login():
         # לבעל יכול להיות קוד משלו, ולכן האימות תלוי במספר שממנו נכנסו
         if user and user.check_pin_for(phone, pin):
             if not user.is_approved:
-                flash('החשבון ממתין לאישור מנהל. נסה שוב מאוחר יותר.', 'danger')
+                if user.status == 'rejected':
+                    flash('החשבון נחסם. נא לפנות למנהל המערכת.', 'danger')
+                else:
+                    flash('החשבון ממתין לאישור מנהל. נסה שוב מאוחר יותר.',
+                          'danger')
                 return render_template('login.html')
             login_user(user)
             return redirect(url_for('dashboard.index'))

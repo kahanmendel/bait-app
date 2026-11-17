@@ -23,6 +23,9 @@ class User(UserMixin, db.Model):
     # אדמין
     is_approved = db.Column(db.Boolean, default=False)
     is_admin = db.Column(db.Boolean, default=False)
+    # חותמת דחייה. is_approved נשאר השער בכל הכניסות, והשדה הזה רק מבדיל
+    # בין חשבון שעדיין לא אושר לבין חשבון שנדחה — שני מצבים שעד כה נראו זהים
+    rejected_at = db.Column(db.DateTime)
     # מיקום
     location_name = db.Column(db.String(100), default='ירושלים')
     location_lat = db.Column(db.Float, default=31.7683)
@@ -74,6 +77,18 @@ class User(UserMixin, db.Model):
         if self.is_husband_phone(phone) and self.pin_hash_husband:
             return check_password_hash(self.pin_hash_husband, str(pin))
         return self.check_pin(pin)
+
+    @property
+    def status(self):
+        """'approved' מחובר, 'pending' ממתין לאישור, 'rejected' נדחה."""
+        if self.is_approved:
+            return 'approved'
+        return 'rejected' if self.rejected_at else 'pending'
+
+    @property
+    def status_label(self):
+        return {'approved': 'מחובר', 'pending': 'ממתין לאישור',
+                'rejected': 'נדחה'}[self.status]
 
     @property
     def yemei_sfira_days(self):
