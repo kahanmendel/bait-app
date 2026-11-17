@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash
 from flask_login import login_required, current_user
 from extensions import db
 from models import Veeset, VesetKavua
-from logic.onah import determine_onah
+from logic.onah import determine_onah_checked
 from logic.kavua import check_kavua, should_cancel_kavua
 from logic.tvila import calc_earliest_hefsek, calc_tvila
 from logic.recalculate import recalculate_all
@@ -26,7 +26,7 @@ def add_veeset():
         duration = int(request.form.get('duration_days', 1))
         notes = request.form.get('notes', '')
         g_date = date.fromisoformat(date_str)
-        onah = determine_onah(time_str, g_date, current_user)
+        onah, onah_times = determine_onah_checked(time_str, g_date, current_user)
 
         v = Veeset(
             user_id=current_user.id,
@@ -35,6 +35,7 @@ def add_veeset():
             onah=onah,
             hebrew_date_str=_hebrew_str(g_date),
             duration_days=duration,
+            onah_needs_review=not onah_times.reliable,
             notes=notes
         )
         db.session.add(v)
@@ -72,6 +73,8 @@ def add_veeset():
 
         hefsek_info = calc_earliest_hefsek(v, current_user)
         flash(f'וסת נוספה — עונת {"יום" if onah == "yom" else "לילה"}', 'success')
+        if not onah_times.reliable:
+            flash('⚠️ העונה נקבעה בלי זמן מדויק וסומנה לאימות', 'danger')
         flash(f'📅 {hefsek_info["label"]}', 'info')
         return redirect(url_for('dashboard.index'))
     return render_template('add_veeset.html')
@@ -88,11 +91,13 @@ def edit_veeset(veeset_id):
         duration = int(request.form.get('duration_days', 1))
         notes = request.form.get('notes', '')
         g_date = date.fromisoformat(date_str)
-        onah = determine_onah(time_str, g_date, current_user)
+        onah, onah_times = determine_onah_checked(time_str, g_date, current_user)
 
         v.gregorian_date = g_date
         v.time_of_sighting = time_str
         v.onah = onah
+        # שמירה ידנית מנקה את הסימון אם הפעם היו זמנים מדויקים
+        v.onah_needs_review = not onah_times.reliable
         v.hebrew_date_str = _hebrew_str(g_date)
         v.duration_days = duration
         v.notes = notes
@@ -105,6 +110,8 @@ def edit_veeset(veeset_id):
 
         messages = recalculate_all(current_user.id)
         flash('וסת עודכנה — חישוב מחדש בוצע', 'success')
+        if not onah_times.reliable:
+            flash('⚠️ העונה נקבעה בלי זמן מדויק וסומנה לאימות', 'danger')
         for msg in messages:
             flash(f'⚠️ {msg}', 'kavua')
         return redirect(url_for('dashboard.index'))
@@ -140,7 +147,10 @@ def end_veeset(veeset_id):
             flash('תאריך סיום לא יכול להיות לפני תאריך התחלה', 'danger')
             return render_template('end_veeset.html', veeset=v)
 
-        end_onah = determine_onah(end_time_str, end_date, current_user)
+        end_onah, end_times = determine_onah_checked(
+            end_time_str, end_date, current_user)
+        if not end_times.reliable:
+            flash('⚠️ עונת הסיום נקבעה בלי זמן מדויק — יש לאמת אותה', 'danger')
         v.duration_days = duration
         v.notes = (v.notes or '') + \
             f' | סיום: {end_date} {end_time_str} עונת {"יום" if end_onah == "yom" else "לילה"}'

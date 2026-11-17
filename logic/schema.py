@@ -12,6 +12,10 @@ ADDED_COLUMNS = {
     'users': {
         'pin_hash_husband': 'VARCHAR(256)',
     },
+    'vesetot': {
+        # רשומות קיימות מקבלות NULL, והקוד מתייחס אליו כאל False
+        'onah_needs_review': 'BOOLEAN',
+    },
 }
 
 

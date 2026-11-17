@@ -96,6 +96,8 @@ class Veeset(db.Model):
     onah = db.Column(db.String(10), nullable=False)
     hebrew_date_str = db.Column(db.String(50))
     duration_days = db.Column(db.Integer, default=1)
+    # True כשהעונה נקבעה בלי זמני הנץ ושקיעה אמינים, ולכן דורשת אימות ידני
+    onah_needs_review = db.Column(db.Boolean, default=False)
     notes = db.Column(db.Text)
     hefsek_date = db.Column(db.Date)
     hefsek_time = db.Column(db.String(5))
@@ -131,6 +133,23 @@ class Reminder(db.Model):
     sent = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AlertLog(db.Model):
+    """
+    רשומת התראה שנשלחה, לצורך מיגון מפני הצפה.
+
+    ההתראות נשלחות מתוך בקשה חיה, ותקלה חוזרת הייתה מייצרת מייל על כל
+    ראייה ועל כל טעינת לוח. הטבלה נשמרת בבסיס הנתונים ולא בזיכרון התהליך,
+    כי ב-Cloud Run יש כמה מכונות והן מתחלפות.
+    """
+    __tablename__ = 'alert_log'
+    id = db.Column(db.Integer, primary_key=True)
+    # מזהה סוג התקלה. התראות באותו מזהה מאוחדות לחלון זמן אחד
+    key = db.Column(db.String(120), nullable=False, index=True)
+    subject = db.Column(db.String(300))
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    delivered = db.Column(db.Boolean, default=False)
 
 
 class PhoneSession(db.Model):

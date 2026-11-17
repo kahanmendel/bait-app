@@ -2,6 +2,25 @@
 {% block title %}לוח ראשי{% endblock %}
 {% block content %}
 
+<!-- ראיות שהעונה שלהן נקבעה בלי זמן מדויק -->
+{% if vesetot_need_review %}
+<div class="card" style="background:#fdecea;border:2px solid #e74c3c;margin-bottom:24px;">
+    <strong>⚠️ {{ vesetot_need_review|length }} ראיות דורשות אימות עונה</strong>
+    <div style="font-size:13px;color:#c0392b;margin-top:4px;">
+        העונה נקבעה בלי זמני הנץ ושקיעה מדויקים, ולכן ייתכן שהיא שגויה — ועם
+        העונה גם ימי הפרישה שנגזרים ממנה. יש לפתוח כל ראייה, לבדוק את השעה
+        ולשמור כדי לאשר.
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        {% for v in vesetot_need_review %}
+        <a href="/edit_veeset/{{ v.id }}" style="font-size:12px;padding:4px 10px;background:#e74c3c;color:white;border-radius:4px;text-decoration:none;">
+            {{ v.gregorian_date }} {{ v.time_of_sighting }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <!-- בנר הריון -->
 {% if current_user.pregnancy_active %}
 <div class="card" style="background:{% if current_user.pregnancy_vesetot_cancelled_at %}#e8f5e9{% else %}#fff3e0{% endif %};border:2px solid {% if current_user.pregnancy_vesetot_cancelled_at %}#27ae60{% else %}#f39c12{% endif %};margin-bottom:24px;">
@@ -111,6 +130,9 @@
                 <td style="padding:8px;">{{ v.time_of_sighting }}</td>
                 <td style="padding:8px;">
                     <span class="onah-badge onah-{{ v.onah }}">{{ 'יום' if v.onah == 'yom' else 'לילה' }}</span>
+                    {% if v.onah_needs_review %}
+                    <span title="העונה נקבעה בלי זמן מדויק — יש לאמת" style="font-size:11px;color:#c0392b;white-space:nowrap;">⚠️ לאימות</span>
+                    {% endif %}
                 </td>
                 <td style="padding:8px;">{{ v.duration_days }}</td>
                 <td style="padding:8px;font-size:13px;color:#9b59b6;">

@@ -7,7 +7,7 @@
 טבילה: לילה שאחרי יום 7
 """
 from datetime import date, timedelta
-from logic.onah import get_sun_times
+from logic.onah import user_sun_times
 from hdate import HebrewDate
 
 
@@ -21,12 +21,10 @@ def calc_earliest_hefsek(veeset, user) -> dict:
     hefsek_date = veeset.gregorian_date + timedelta(days=days - 1)
     hd = HebrewDate.from_gdate(hefsek_date)
 
-    # שעת שקיעה
-    if user.use_auto_times:
-        sun = get_sun_times(user.location_lat, user.location_lon, hefsek_date)
-        shkia = sun['shkia'].strftime('%H:%M')
-    else:
-        shkia = user.custom_shkia or '19:00'
+    # שעת שקיעה. user_sun_times מכבד זמנים ידניים, מחשב מקומית אחרת,
+    # ומתריע בעצמו על כל מצב שבו אין זמן מדויק
+    times = user_sun_times(user, hefsek_date)
+    shkia = times.shkia.strftime('%H:%M')
 
     return {
         'hefsek_date': hefsek_date,

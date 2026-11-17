@@ -7,7 +7,7 @@ API לימות המשיח.
 from flask import Blueprint, jsonify, request
 from models import User, Veeset, VesetKavua, Reminder, PhoneSession
 from logic.calculations import get_all_expected
-from logic.onah import determine_onah
+from logic.onah import determine_onah_checked
 from logic.recalculate import recalculate_all
 from extensions import db
 from hdate import HebrewDate
@@ -141,6 +141,7 @@ def get_vesetot(user):
         'onah': v.onah,
         'onah_label': 'יום' if v.onah == 'yom' else 'לילה',
         'duration_days': v.duration_days,
+        'onah_needs_review': bool(v.onah_needs_review),
         'notes': v.notes
     } for v in vesetot]})
 
@@ -158,7 +159,7 @@ def add_veeset(user):
     # שעה — ברירת מחדל עכשיו
     time_str = data.get('time', datetime.now().strftime('%H:%M'))
 
-    onah = determine_onah(time_str, g_date, user)
+    onah, onah_times = determine_onah_checked(time_str, g_date, user)
     hebrew_str = _hdate_str(g_date)
 
     v = Veeset(
@@ -168,6 +169,7 @@ def add_veeset(user):
         onah=onah,
         hebrew_date_str=hebrew_str,
         duration_days=data.get('duration_days', 1),
+        onah_needs_review=not onah_times.reliable,
         notes=data.get('notes', 'דיווח מטלפון')
     )
     db.session.add(v)
@@ -225,7 +227,9 @@ def edit_veeset(user, veeset_id):
 
     if 'time' in data:
         v.time_of_sighting = data['time']
-        v.onah = determine_onah(data['time'], v.gregorian_date, user)
+        v.onah, onah_times = determine_onah_checked(
+            data['time'], v.gregorian_date, user)
+        v.onah_needs_review = not onah_times.reliable
 
     if 'duration_days' in data:
         v.duration_days = int(data['duration_days'])

@@ -33,7 +33,7 @@ from models import User, Veeset, Reminder, normalize_phone
 from logic import yemot as y
 from logic.calculations import hdate_str
 from logic.expected import get_user_expected
-from logic.onah import determine_onah
+from logic.onah import determine_onah_checked
 from logic.recalculate import recalculate_all
 
 yemot_bp = Blueprint('yemot', __name__)
@@ -362,7 +362,7 @@ def _flow_report(user, values):
     if not time_str:
         return _end(y.t('השעה שהוקשה אינה תקינה'))
 
-    onah = determine_onah(time_str, g_date, user)
+    onah, onah_times = determine_onah_checked(time_str, g_date, user)
 
     confirm = _value(values, 'rep_confirm')
     if not confirm:
@@ -389,6 +389,7 @@ def _flow_report(user, values):
         onah=onah,
         hebrew_date_str=hdate_str(g_date),
         duration_days=1,
+        onah_needs_review=not onah_times.reliable,
         notes='דיווח טלפוני',
     )
     db.session.add(veeset)
@@ -399,11 +400,13 @@ def _flow_report(user, values):
     except Exception:
         current_app.logger.exception('yemot: recalculate_all failed')
 
-    return _end(
-        y.t('הראייה נרשמה בהצלחה בתאריך'),
-        y.h_date(g_date),
-        y.t(_onah_name(onah)),
-    )
+    parts = [y.t('הראייה נרשמה בהצלחה בתאריך'), y.h_date(g_date),
+             y.t(_onah_name(onah))]
+    # לא משתיקים חישוב עונה שנעשה בלי זמן מדויק — המתקשרת שומעת זאת,
+    # הרשומה מסומנת לאימות, ומנהל המערכת מקבל התראה
+    if not onah_times.reliable:
+        parts.append(y.t('העונה נקבעה בלי זמן מדויק ויש לאמת אותה באתר'))
+    return _end(*parts)
 
 
 # ===== 2 — ימי פרישה קרובים =====

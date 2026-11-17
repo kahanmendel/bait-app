@@ -3,7 +3,6 @@ flask
 flask-sqlalchemy
 flask-login
 hdate
-requests
 python-dotenv
 gunicorn
 tzdata

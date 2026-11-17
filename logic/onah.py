@@ -1,54 +1,88 @@
 """
-חישוב עונה (יום/לילה) לפי שעה, תאריך ומיקום משתמשת.
-עונת יום: מהנץ החמה עד השקיעה
-עונת לילה: מהשקיעה עד הנץ (שייכת ליום העברי הבא)
+קביעת עונה (יום/לילה) לפי שעה, תאריך ומיקום המשתמשת.
+
+עונת יום: מהנץ החמה עד השקיעה.
+עונת לילה: מהשקיעה עד הנץ.
+
+הזמנים מחושבים מקומית ב-logic/zmanim.py. כל מצב שבו אין זמן מדויק — שגיאת
+חישוב, או זמנים ידניים חסרים או פגומים — מחזיר עונה שמסומנת כבלתי אמינה
+ושולח התראה למייל. הקוראים שכותבים ראייה לבסיס הנתונים מסמנים אותה
+ב-onah_needs_review, כדי שתופיע לאימות ולא תיבלע בשקט.
+
+שים לב: עונת לילה שייכת ליום העברי הבא. ההזזה הזאת אינה מיושמת בחישובים
+כרגע — ראה README.
 """
-import requests
-from datetime import datetime, date, time
-import os
+from datetime import date, time
 
-SUNRISE_SUNSET_API = "https://api.sunrise-sunset.org/json"
+from logic.alerts import send_alert
+from logic.zmanim import (
+    compute_sun_times,
+    custom_sun_times,
+    fallback_sun_times,
+)
 
-def get_sun_times(lat: float, lon: float, d: date) -> dict:
-    """מחזיר שעות נץ ושקיעה בשעון מקומי (UTC+3 לישראל)"""
+
+def get_sun_times(lat, lon, d: date):
+    """
+    הנץ ושקיעה למיקום ולתאריך.
+
+    חישוב מקומי. אם הוא נכשל — דבר שאינו אמור לקרות, כי אין כאן קריאת רשת —
+    נשלחת התראה ומוחזרת ברירת מחדל גסה המסומנת כבלתי אמינה.
+    """
     try:
-        resp = requests.get(SUNRISE_SUNSET_API, params={
-            'lat': lat, 'lng': lon,
-            'date': d.strftime('%Y-%m-%d'),
-            'formatted': 0
-        }, timeout=5)
-        data = resp.json()['results']
-        # ממיר UTC לשעון ישראל (UTC+2/+3)
-        from datetime import timezone, timedelta
-        tz_israel = timedelta(hours=3)  # שעון קיץ — ניתן לשפר
-        sunrise_utc = datetime.fromisoformat(data['sunrise'])
-        sunset_utc = datetime.fromisoformat(data['sunset'])
-        sunrise_local = (sunrise_utc + tz_israel).time()
-        sunset_local = (sunset_utc + tz_israel).time()
-        return {'hanetz': sunrise_local, 'shkia': sunset_local}
-    except Exception:
-        # ברירת מחדל לירושלים
-        return {'hanetz': time(6, 0), 'shkia': time(19, 0)}
+        return compute_sun_times(lat, lon, d)
+    except Exception as exc:
+        fallback = fallback_sun_times()
+        send_alert(
+            'bait-app: חישוב הנץ ושקיעה נכשל',
+            'חישוב הזמנים המקומי נכשל, והמערכת נפלה לברירת מחדל של '
+            f'{fallback.hanetz:%H:%M} ו-{fallback.shkia:%H:%M}.\n'
+            f'תאריך: {d}\nמיקום: {lat}, {lon}\n'
+            f'שגיאה: {exc.__class__.__name__}: {exc}\n\n'
+            'כל עונה שתיקבע עד לתיקון מסומנת כדורשת אימות.',
+            key='zmanim_compute_failed',
+        )
+        return fallback
 
 
-def determine_onah(sighting_time: str, sighting_date: date,
-                   user) -> str:
+def user_sun_times(user, d: date):
     """
-    קובע עונה לפי שעת ראייה.
-    מחזיר 'yom' או 'layla'.
-    שים לב: לילה = אחרי שקיעה או לפני הנץ → שייך ליום העברי הבא.
+    הזמנים הרלוונטיים למשתמשת — ידניים אם ביקשה, ואחרת מחושבים.
+
+    זמנים ידניים פגומים אינם מושתקים: נשלחת התראה, החישוב המקומי משמש
+    כגיבוי מספרי, והתוצאה מסומנת כבלתי אמינה כי אינה מה שהמשתמשת ביקשה.
     """
-    h, m = map(int, sighting_time.split(':'))
-    t = time(h, m)
+    if getattr(user, 'use_auto_times', True):
+        return get_sun_times(user.location_lat, user.location_lon, d)
 
-    if user.use_auto_times:
-        sun = get_sun_times(user.location_lat, user.location_lon, sighting_date)
-    else:
-        hh, mm = map(int, user.custom_hanetz.split(':'))
-        sh, sm = map(int, user.custom_shkia.split(':'))
-        sun = {'hanetz': time(hh, mm), 'shkia': time(sh, sm)}
+    try:
+        return custom_sun_times(user)
+    except Exception as exc:
+        send_alert(
+            'bait-app: זמנים ידניים חסרים או פגומים',
+            f'המשתמשת (id={getattr(user, "id", "?")}) מוגדרת לזמנים ידניים, '
+            f'אבל הם אינם שמישים: {exc}\n'
+            f'הנץ: {user.custom_hanetz!r}  שקיעה: {user.custom_shkia!r}\n'
+            f'תאריך: {d}\n\n'
+            'המערכת השתמשה בזמנים המחושבים למיקום שלה, והעונה סומנה '
+            'כדורשת אימות.',
+            key=f'custom_times_invalid:{getattr(user, "id", "?")}',
+        )
+        return get_sun_times(user.location_lat, user.location_lon, d)\
+            ._replace(source='computed_instead_of_custom', reliable=False)
 
-    if sun['hanetz'] <= t < sun['shkia']:
-        return 'yom'
-    else:
-        return 'layla'
+
+def determine_onah_checked(sighting_time: str, sighting_date: date, user):
+    """
+    קובע עונה ומחזיר (עונה, זמנים).
+
+    העונה היא 'yom' או 'layla'. הזמנים כוללים reliable — False פירושו שהעונה
+    נקבעה בלי זמן מדויק ויש לאמת אותה.
+    """
+    hour, minute = (int(part) for part in sighting_time.split(':'))
+    times = user_sun_times(user, sighting_date)
+
+    sighting = time(hour, minute)
+    onah = 'yom' if times.hanetz <= sighting < times.shkia else 'layla'
+    return onah, times
+

@@ -26,6 +26,10 @@ def index():
     if current_user.pregnancy_active and current_user.pregnancy_start_date:
         pregnancy_cancel_date = current_user.pregnancy_start_date + timedelta(days=90)
 
+    # ראיות שהעונה שלהן נקבעה בלי זמן מדויק. הערך יכול להיות NULL ברשומות
+    # שנוצרו לפני הוספת העמודה, ולכן נבדק כאמת ולא בהשוואה ל-True
+    vesetot_need_review = [v for v in vesetot if v.onah_needs_review]
+
     # היסטוריה: חדש למעלה
     vesetot_display = list(reversed(vesetot))
 
@@ -35,4 +39,5 @@ def index():
                            expected=expected,
                            active_kavuot=active_kavuot,
                            last_veeset=last_veeset,
+                           vesetot_need_review=vesetot_need_review,
                            pregnancy_cancel_date=pregnancy_cancel_date)
